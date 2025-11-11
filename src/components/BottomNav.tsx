@@ -1,0 +1,50 @@
+import { Home, Newspaper, Users, User } from 'lucide-react';
+
+export type TabType = 'accueil' | 'actualite' | 'communaute' | 'profil';
+
+interface BottomNavProps {
+  activeTab: TabType;
+  onTabChange: (tab: TabType) => void;
+}
+
+export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
+  const tabs = [
+    { id: 'accueil' as TabType, label: 'Accueil', icon: Home },
+    { id: 'actualite' as TabType, label: "Fil d'actualité", icon: Newspaper },
+    { id: 'communaute' as TabType, label: 'Communauté', icon: Users },
+    { id: 'profil' as TabType, label: 'Profil', icon: User },
+  ];
+
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl z-50">
+      <div className="max-w-screen-xl mx-auto px-4">
+        <div className="grid grid-cols-4 gap-2">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+
+            return (
+              <button
+                key={tab.id}
+                onClick={() => onTabChange(tab.id)}
+                className={`interactive flex flex-col items-center justify-center py-3 px-2 transition-all duration-300 ${
+                  isActive ? 'text-[#18A238] scale-105' : 'text-gray-500 hover:text-[#2BC047]'
+                }`}
+              >
+                <Icon
+                  className={`w-6 h-6 mb-1 transition-all duration-300 ${
+                    isActive ? 'scale-110' : 'scale-100'
+                  }`}
+                  strokeWidth={isActive ? 2.5 : 2}
+                />
+                <span className={`text-xs font-medium ${isActive ? 'font-bold' : ''}`}>
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </nav>
+  );
+}

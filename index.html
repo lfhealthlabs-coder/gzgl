@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/logoltapp.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Loto Gains Web App</title>
+
+    <!-- Manifest para Android e navegadores -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Configuração para iOS -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Loto Gains" />
+
+    <!-- Ícones para iOS -->
+    <link rel="apple-touch-icon" sizes="120x120" href="/logoltapp.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/logoltapp.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/logoltapp.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/logoltapp.png" />
+
+    <!-- Splash screen básica (iPhone X/11/12/13/14, ajustável) -->
+    <link rel="apple-touch-startup-image" href="/logoltapp.png"
+      media="(device-width: 375px) and (device-height: 812px)
+      and (-webkit-device-pixel-ratio: 3)">
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
