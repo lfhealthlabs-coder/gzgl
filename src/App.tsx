@@ -9,6 +9,8 @@ import VideoDetailPage from './pages/VideoDetailPage';
 import BottomNav, { TabType } from './components/BottomNav';
 import FloatingSupportButton from './components/FloatingSupportButton';
 import IAPage from './pages/AI';
+import TurboPage from './pages/TurboPage';
+import BonusPage from './pages/BonusPage';
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -44,6 +46,24 @@ function App() {
       );
     }
 
+    if (selectedFeature === 'turbo') {
+      return (
+        <>
+          <CustomCursor />
+          <TurboPage onBack={handleBackToHome} />
+        </>
+      );
+    }
+
+    if (selectedFeature === 'bonus') {
+      return (
+        <>
+          <CustomCursor />
+          <BonusPage onBack={handleBackToHome} />
+        </>
+      );
+    }
+
     return (
       <>
         <CustomCursor />
@@ -58,6 +78,7 @@ function App() {
       <div className="min-h-screen">
         {activeTab === 'accueil' && <AccueilPage onFeatureClick={handleFeatureClick} />}
         {activeTab === 'actualite' && <ActualitePage />}
+        {activeTab === 'bonus' && <BonusPage onBack={handleBackToHome} />}
         {activeTab === 'communaute' && <CommunautePage />}
         {activeTab === 'profil' && <ProfilPage />}
 
