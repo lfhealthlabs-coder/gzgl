@@ -26,8 +26,6 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     }
 
     setError('');
-    // Salva o email no localStorage para ser usado no perfil
-    localStorage.setItem('user_email', email);
     onLogin();
   };
 
