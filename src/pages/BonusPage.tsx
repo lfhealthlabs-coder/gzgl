@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Trophy, Clock, TrendingUp, Newspaper, ExternalLink, Sparkles, CheckCircle2, Moon, Sun } from 'lucide-react';
+import { ArrowLeft, Trophy, Clock, TrendingUp, Newspaper, ExternalLink, Sparkles, Moon, Sun } from 'lucide-react';
 
 interface BonusPageProps {
   onBack: () => void;
@@ -25,6 +25,10 @@ interface Result {
   numeros: number[];
   horario: string;
   lotteryId: string;
+  dateTirage: string;
+  valeur: number;
+  isSorteado: boolean;
+  hasAPI: boolean;
 }
 
 interface News {
@@ -35,78 +39,105 @@ interface News {
   lotteryId: string;
 }
 
-interface UserHistory {
-  numeros: number[];
+interface Ticket {
+  id: string;
   loterie: string;
+  lotteryId: string;
+  numeros: string;
+  note: string;
+  dateAdded: string;
+  resultado?: {
+    matched: number;
+    isWinner: boolean;
+  };
 }
 
 type FilterType = 'tous' | 'haut-potentiel' | 'europeen' | 'national' | 'international';
 
 // Mock de loterias disponíveis
-const lotteries: { [key: string]: { name: string; url: string; region: 'europe' | 'france' | 'international'; pays: string; probabilite: string } } = {
-  // França (expandido)
-  'loto-fr': { name: 'Loto', url: 'https://www.fdj.fr/jeux/jeux-de-tirage/loto', region: 'france', pays: 'France', probabilite: '1 sur 19 068 840' },
-  'euromillions-fr': { name: 'EuroMillions My Million', url: 'https://www.fdj.fr/jeux/jeux-de-tirage/euromillions', region: 'france', pays: 'France', probabilite: '1 sur 139 838 160' },
-  'keno-fr': { name: 'Keno', url: 'https://www.fdj.fr/jeux/jeux-de-tirage/keno', region: 'france', pays: 'France', probabilite: '1 sur 2 147 181' },
-  'loto-super-cagnotte': { name: 'Loto Super Cagnotte', url: 'https://www.fdj.fr', region: 'france', pays: 'France', probabilite: '1 sur 19 068 840' },
-  'eurodreams-fr': { name: 'EuroDreams', url: 'https://www.fdj.fr/jeux/jeux-de-tirage/eurodreams', region: 'france', pays: 'France', probabilite: '1 sur 19 191 900' },
-  'amigo-fr': { name: 'Amigo', url: 'https://www.fdj.fr', region: 'france', pays: 'France', probabilite: '1 sur 1 906 884' },
-  'cash-fr': { name: 'Cash', url: 'https://www.fdj.fr', region: 'france', pays: 'France', probabilite: '1 sur 324 632' },
-  'loto-week-end': { name: 'Loto Week-end', url: 'https://www.fdj.fr', region: 'france', pays: 'France', probabilite: '1 sur 19 068 840' },
-  'quinté-plus': { name: 'Quinté+', url: 'https://www.pmu.fr', region: 'france', pays: 'France', probabilite: '1 sur 7 893 600' },
-  'joker-plus': { name: 'Joker+', url: 'https://www.fdj.fr', region: 'france', pays: 'France', probabilite: '1 sur 1 000 000' },
+const lotteries: { [key: string]: { 
+  name: string; 
+  url: string; 
+  region: 'europe' | 'france' | 'international'; 
+  pays: string; 
+  probabilite: string;
+  hasAPI: boolean;
+  apiUrl?: string;
+} } = {
+  // França (expandido) - FDJ possui APIs limitadas
+  'loto-fr': { name: 'Loto', url: 'https://www.fdj.fr/jeux/jeux-de-tirage/loto', region: 'france', pays: 'France', probabilite: '1 sur 19 068 840', hasAPI: true, apiUrl: 'https://www.fdj.fr/api/loto' },
+  'euromillions-fr': { name: 'EuroMillions My Million', url: 'https://www.fdj.fr/jeux/jeux-de-tirage/euromillions', region: 'france', pays: 'France', probabilite: '1 sur 139 838 160', hasAPI: true, apiUrl: 'https://www.fdj.fr/api/euromillions' },
+  'keno-fr': { name: 'Keno', url: 'https://www.fdj.fr/jeux/jeux-de-tirage/keno', region: 'france', pays: 'France', probabilite: '1 sur 2 147 181', hasAPI: true, apiUrl: 'https://www.fdj.fr/api/keno' },
+  'loto-super-cagnotte': { name: 'Loto Super Cagnotte', url: 'https://www.fdj.fr', region: 'france', pays: 'France', probabilite: '1 sur 19 068 840', hasAPI: false },
+  'eurodreams-fr': { name: 'EuroDreams', url: 'https://www.fdj.fr/jeux/jeux-de-tirage/eurodreams', region: 'france', pays: 'France', probabilite: '1 sur 19 191 900', hasAPI: false },
+  'amigo-fr': { name: 'Amigo', url: 'https://www.fdj.fr', region: 'france', pays: 'France', probabilite: '1 sur 1 906 884', hasAPI: false },
+  'cash-fr': { name: 'Cash', url: 'https://www.fdj.fr', region: 'france', pays: 'France', probabilite: '1 sur 324 632', hasAPI: false },
+  'loto-week-end': { name: 'Loto Week-end', url: 'https://www.fdj.fr', region: 'france', pays: 'France', probabilite: '1 sur 19 068 840', hasAPI: false },
+  'quinté-plus': { name: 'Quinté+', url: 'https://www.pmu.fr', region: 'france', pays: 'France', probabilite: '1 sur 7 893 600', hasAPI: false },
+  'joker-plus': { name: 'Joker+', url: 'https://www.fdj.fr', region: 'france', pays: 'France', probabilite: '1 sur 1 000 000', hasAPI: false },
   
-  // Europa (expandido)
-  'euromillions': { name: 'EuroMillions', url: 'https://www.euro-millions.com', region: 'europe', pays: 'Europe', probabilite: '1 sur 139 838 160' },
-  'eurojackpot': { name: 'Eurojackpot', url: 'https://www.eurojackpot.org', region: 'europe', pays: 'Europe', probabilite: '1 sur 139 838 160' },
-  'superenalotto': { name: 'SuperEnalotto', url: 'https://www.superenalotto.it', region: 'europe', pays: 'Italie', probabilite: '1 sur 622 614 630' },
-  'el-gordo': { name: 'El Gordo', url: 'https://www.loteriaelgordo.es', region: 'europe', pays: 'Espagne', probabilite: '1 sur 31 625 100' },
-  'lotto-uk': { name: 'UK National Lottery', url: 'https://www.national-lottery.co.uk', region: 'europe', pays: 'Royaume-Uni', probabilite: '1 sur 45 057 474' },
-  'thunderball-uk': { name: 'UK Thunderball', url: 'https://www.national-lottery.co.uk', region: 'europe', pays: 'Royaume-Uni', probabilite: '1 sur 8 060 598' },
-  'eurodreams-eu': { name: 'EuroDreams', url: 'https://www.euro-millions.com', region: 'europe', pays: 'Europe', probabilite: '1 sur 19 191 900' },
-  'lotto-allemagne': { name: 'Lotto 6aus49', url: 'https://www.lotto.de', region: 'europe', pays: 'Allemagne', probabilite: '1 sur 139 838 160' },
-  'lotto-austria': { name: 'Lotto Autriche', url: 'https://www.lotterien.at', region: 'europe', pays: 'Autriche', probabilite: '1 sur 8 145 060' },
-  'viking-lotto': { name: 'Viking Lotto', url: 'https://www.vikinglotto.com', region: 'europe', pays: 'Scandinavie', probabilite: '1 sur 98 172 096' },
-  'irish-lotto': { name: 'Irish Lotto', url: 'https://www.lottery.ie', region: 'europe', pays: 'Irlande', probabilite: '1 sur 10 737 573' },
-  'swiss-lotto': { name: 'Swiss Lotto', url: 'https://www.swisslos.ch', region: 'europe', pays: 'Suisse', probabilite: '1 sur 31 474 716' },
-  'polish-lotto': { name: 'Lotto Pologne', url: 'https://www.lotto.pl', region: 'europe', pays: 'Pologne', probabilite: '1 sur 13 983 816' },
-  'dutch-lotto': { name: 'Lotto Pays-Bas', url: 'https://www.lotto.nl', region: 'europe', pays: 'Pays-Bas', probabilite: '1 sur 8 145 060' },
-  'greek-lotto': { name: 'Greek Lotto', url: 'https://www.opap.gr', region: 'europe', pays: 'Grèce', probabilite: '1 sur 24 435 180' },
-  'belgian-lotto': { name: 'Lotto Belgique', url: 'https://www.loterie-nationale.be', region: 'europe', pays: 'Belgique', probabilite: '1 sur 13 983 816' },
-  'set-for-life-uk': { name: 'Set For Life', url: 'https://www.national-lottery.co.uk', region: 'europe', pays: 'Royaume-Uni', probabilite: '1 sur 15 339 390' },
-  'la-primitiva': { name: 'La Primitiva', url: 'https://www.loteriasyapuestas.es', region: 'europe', pays: 'Espagne', probabilite: '1 sur 13 983 816' },
-  'bonoloto': { name: 'Bonoloto', url: 'https://www.loteriasyapuestas.es', region: 'europe', pays: 'Espagne', probabilite: '1 sur 13 983 816' },
-  'lotto-portugal': { name: 'Totoloto', url: 'https://www.jogossantacasa.pt', region: 'europe', pays: 'Portugal', probabilite: '1 sur 13 983 816' },
-  'swedish-lotto': { name: 'Swedish Lotto', url: 'https://www.svenskaspel.se', region: 'europe', pays: 'Suède', probabilite: '1 sur 6 724 520' },
-  'norway-lotto': { name: 'Norway Lotto', url: 'https://www.norsk-tipping.no', region: 'europe', pays: 'Norvège', probabilite: '1 sur 5 379 616' },
-  'denmark-lotto': { name: 'Denmark Lotto', url: 'https://www.danskespil.dk', region: 'europe', pays: 'Danemark', probabilite: '1 sur 8 347 680' },
-  'finnish-lotto': { name: 'Veikkaus Lotto', url: 'https://www.veikkaus.fi', region: 'europe', pays: 'Finlande', probabilite: '1 sur 15 380 937' },
-  'czech-lotto': { name: 'Sportka', url: 'https://www.sazka.cz', region: 'europe', pays: 'République Tchèque', probabilite: '1 sur 13 983 816' },
-  'hungarian-lotto': { name: 'Hatoslottó', url: 'https://www.szerencsejatek.hu', region: 'europe', pays: 'Hongrie', probabilite: '1 sur 13 983 816' },
-  'croatian-lotto': { name: 'Lotto Croatia', url: 'https://www.lutrija.hr', region: 'europe', pays: 'Croatie', probabilite: '1 sur 13 983 816' },
+  // Europa (expandido) - Poucas APIs públicas disponíveis
+  'euromillions': { name: 'EuroMillions', url: 'https://www.euro-millions.com', region: 'europe', pays: 'Europe', probabilite: '1 sur 139 838 160', hasAPI: true, apiUrl: 'https://www.euro-millions.com/api/results' },
+  'eurojackpot': { name: 'Eurojackpot', url: 'https://www.eurojackpot.org', region: 'europe', pays: 'Europe', probabilite: '1 sur 139 838 160', hasAPI: true, apiUrl: 'https://www.eurojackpot.org/api/results' },
+  'superenalotto': { name: 'SuperEnalotto', url: 'https://www.superenalotto.it', region: 'europe', pays: 'Italie', probabilite: '1 sur 622 614 630', hasAPI: false },
+  'el-gordo': { name: 'El Gordo', url: 'https://www.loteriaelgordo.es', region: 'europe', pays: 'Espagne', probabilite: '1 sur 31 625 100', hasAPI: false },
+  'lotto-uk': { name: 'UK National Lottery', url: 'https://www.national-lottery.co.uk', region: 'europe', pays: 'Royaume-Uni', probabilite: '1 sur 45 057 474', hasAPI: true, apiUrl: 'https://www.national-lottery.co.uk/api/results' },
+  'thunderball-uk': { name: 'UK Thunderball', url: 'https://www.national-lottery.co.uk', region: 'europe', pays: 'Royaume-Uni', probabilite: '1 sur 8 060 598', hasAPI: true, apiUrl: 'https://www.national-lottery.co.uk/api/thunderball' },
+  'eurodreams-eu': { name: 'EuroDreams', url: 'https://www.euro-millions.com', region: 'europe', pays: 'Europe', probabilite: '1 sur 19 191 900', hasAPI: false },
+  'lotto-allemagne': { name: 'Lotto 6aus49', url: 'https://www.lotto.de', region: 'europe', pays: 'Allemagne', probabilite: '1 sur 139 838 160', hasAPI: false },
+  'lotto-austria': { name: 'Lotto Autriche', url: 'https://www.lotterien.at', region: 'europe', pays: 'Autriche', probabilite: '1 sur 8 145 060', hasAPI: false },
+  'viking-lotto': { name: 'Viking Lotto', url: 'https://www.vikinglotto.com', region: 'europe', pays: 'Scandinavie', probabilite: '1 sur 98 172 096', hasAPI: false },
+  'irish-lotto': { name: 'Irish Lotto', url: 'https://www.lottery.ie', region: 'europe', pays: 'Irlande', probabilite: '1 sur 10 737 573', hasAPI: true, apiUrl: 'https://www.lottery.ie/api/results' },
+  'swiss-lotto': { name: 'Swiss Lotto', url: 'https://www.swisslos.ch', region: 'europe', pays: 'Suisse', probabilite: '1 sur 31 474 716', hasAPI: false },
+  'polish-lotto': { name: 'Lotto Pologne', url: 'https://www.lotto.pl', region: 'europe', pays: 'Pologne', probabilite: '1 sur 13 983 816', hasAPI: false },
+  'dutch-lotto': { name: 'Lotto Pays-Bas', url: 'https://www.lotto.nl', region: 'europe', pays: 'Pays-Bas', probabilite: '1 sur 8 145 060', hasAPI: false },
+  'greek-lotto': { name: 'Greek Lotto', url: 'https://www.opap.gr', region: 'europe', pays: 'Grèce', probabilite: '1 sur 24 435 180', hasAPI: false },
+  'belgian-lotto': { name: 'Lotto Belgique', url: 'https://www.loterie-nationale.be', region: 'europe', pays: 'Belgique', probabilite: '1 sur 13 983 816', hasAPI: false },
+  'set-for-life-uk': { name: 'Set For Life', url: 'https://www.national-lottery.co.uk', region: 'europe', pays: 'Royaume-Uni', probabilite: '1 sur 15 339 390', hasAPI: true, apiUrl: 'https://www.national-lottery.co.uk/api/setforlife' },
+  'la-primitiva': { name: 'La Primitiva', url: 'https://www.loteriasyapuestas.es', region: 'europe', pays: 'Espagne', probabilite: '1 sur 13 983 816', hasAPI: false },
+  'bonoloto': { name: 'Bonoloto', url: 'https://www.loteriasyapuestas.es', region: 'europe', pays: 'Espagne', probabilite: '1 sur 13 983 816', hasAPI: false },
+  'lotto-portugal': { name: 'Totoloto', url: 'https://www.jogossantacasa.pt', region: 'europe', pays: 'Portugal', probabilite: '1 sur 13 983 816', hasAPI: false },
+  'swedish-lotto': { name: 'Swedish Lotto', url: 'https://www.svenskaspel.se', region: 'europe', pays: 'Suède', probabilite: '1 sur 6 724 520', hasAPI: false },
+  'norway-lotto': { name: 'Norway Lotto', url: 'https://www.norsk-tipping.no', region: 'europe', pays: 'Norvège', probabilite: '1 sur 5 379 616', hasAPI: false },
+  'denmark-lotto': { name: 'Denmark Lotto', url: 'https://www.danskespil.dk', region: 'europe', pays: 'Danemark', probabilite: '1 sur 8 347 680', hasAPI: false },
+  'finnish-lotto': { name: 'Veikkaus Lotto', url: 'https://www.veikkaus.fi', region: 'europe', pays: 'Finlande', probabilite: '1 sur 15 380 937', hasAPI: false },
+  'czech-lotto': { name: 'Sportka', url: 'https://www.sazka.cz', region: 'europe', pays: 'République Tchèque', probabilite: '1 sur 13 983 816', hasAPI: false },
+  'hungarian-lotto': { name: 'Hatoslottó', url: 'https://www.szerencsejatek.hu', region: 'europe', pays: 'Hongrie', probabilite: '1 sur 13 983 816', hasAPI: false },
+  'croatian-lotto': { name: 'Lotto Croatia', url: 'https://www.lutrija.hr', region: 'europe', pays: 'Croatie', probabilite: '1 sur 13 983 816', hasAPI: false },
   
-  // Internacional
-  'powerball': { name: 'Powerball', url: 'https://www.powerball.com', region: 'international', pays: 'USA', probabilite: '1 sur 292 201 338' },
-  'mega-millions': { name: 'Mega Millions', url: 'https://www.megamillions.com', region: 'international', pays: 'USA', probabilite: '1 sur 302 575 350' },
-  'mega-sena': { name: 'Mega-Sena', url: 'https://loterias.caixa.gov.br', region: 'international', pays: 'Brésil', probabilite: '1 sur 50 063 860' },
-  'oz-lotto': { name: 'Oz Lotto', url: 'https://www.ozlotteries.com', region: 'international', pays: 'Australie', probabilite: '1 sur 45 379 620' },
-  'lotto-max': { name: 'Lotto Max', url: 'https://www.lotto649.com', region: 'international', pays: 'Canada', probabilite: '1 sur 33 294 800' },
-  'lotto-649': { name: 'Lotto 6/49', url: 'https://www.lotto649.com', region: 'international', pays: 'Canada', probabilite: '1 sur 13 983 816' },
+  // Internacional - APIs disponíveis para principais
+  'powerball': { name: 'Powerball', url: 'https://www.powerball.com', region: 'international', pays: 'USA', probabilite: '1 sur 292 201 338', hasAPI: true, apiUrl: 'https://www.powerball.com/api/results' },
+  'mega-millions': { name: 'Mega Millions', url: 'https://www.megamillions.com', region: 'international', pays: 'USA', probabilite: '1 sur 302 575 350', hasAPI: true, apiUrl: 'https://www.megamillions.com/api/results' },
+  'mega-sena': { name: 'Mega-Sena', url: 'https://loterias.caixa.gov.br', region: 'international', pays: 'Brésil', probabilite: '1 sur 50 063 860', hasAPI: true, apiUrl: 'https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena' },
+  'oz-lotto': { name: 'Oz Lotto', url: 'https://www.ozlotteries.com', region: 'international', pays: 'Australie', probabilite: '1 sur 45 379 620', hasAPI: false },
+  'lotto-max': { name: 'Lotto Max', url: 'https://www.lotto649.com', region: 'international', pays: 'Canada', probabilite: '1 sur 33 294 800', hasAPI: false },
+  'lotto-649': { name: 'Lotto 6/49', url: 'https://www.lotto649.com', region: 'international', pays: 'Canada', probabilite: '1 sur 13 983 816', hasAPI: false },
 };
+
+type LotoGainsTabType = 'resultats' | 'mes-billets';
 
 export default function BonusPage({ onBack }: BonusPageProps) {
   const [jackpots, setJackpots] = useState<Jackpot[]>([]);
   const [results, setResults] = useState<Result[]>([]);
   const [news, setNews] = useState<News[]>([]);
   const [lastJackpotUpdate, setLastJackpotUpdate] = useState<number>(0);
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [matchedNumbers, setMatchedNumbers] = useState<number>(0);
   const [hasNewToday, setHasNewToday] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterType>('tous');
   const [darkMode, setDarkMode] = useState(false);
   const [activeModule, setActiveModule] = useState<'jackpots' | 'results' | 'news' | null>(null);
+  const [lotoGainsTab, setLotoGainsTab] = useState<LotoGainsTabType>('resultats');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [resultsPerPage] = useState(3);
+  const [currentPage, setCurrentPage] = useState(1);
+  
+  // Estados para Mes billets
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [selectedLottery, setSelectedLottery] = useState('');
+  const [ticketNumbers, setTicketNumbers] = useState('');
+  const [ticketNote, setTicketNote] = useState('');
+  const [selectedTickets, setSelectedTickets] = useState<string[]>([]);
 
-  // Gerar jackpots mockados
+  // Gerar jackpots mockados (incluindo últimas 2 semanas para os com API)
   const getTodayJackpots = (): Jackpot[] => {
     const lotteryIds = Object.keys(lotteries);
     const mockJackpots: Jackpot[] = [];
@@ -171,6 +202,32 @@ export default function BonusPage({ onBack }: BonusPageProps) {
         baseValue = Math.random() * 300000000 + 50000000; // 50M a 350M
       }
       
+      // Se tem API, adicionar sorteios das últimas 2 semanas (passados)
+      if (lottery.hasAPI) {
+        // Adicionar 3 sorteios passados (últimas 2 semanas)
+        for (let pastDays = 14; pastDays >= 7; pastDays -= 7) {
+          const dateTiragePassada = new Date(hoje);
+          dateTiragePassada.setDate(dateTiragePassada.getDate() - pastDays);
+          
+          const dateLimitePassada = new Date(dateTiragePassada);
+          dateLimitePassada.setHours(dateLimitePassada.getHours() - 2);
+          
+          mockJackpots.push({
+            id: `jackpot_${index}_past_${pastDays}`,
+            pays: lottery.pays,
+            loterie: lottery.name,
+            valeur: Math.round(baseValue * (0.8 + Math.random() * 0.4)), // Variação de valor
+            tirage: ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'][dateTiragePassada.getDay()],
+            date_limite: dateLimitePassada.toLocaleDateString('fr-FR'),
+            date_tirage: dateTiragePassada.toLocaleDateString('fr-FR'),
+            probabilite: lottery.probabilite,
+            notes: `Tirage du ${dateTiragePassada.toLocaleDateString('fr-FR')} - Résultats disponibles`,
+            lotteryId,
+            region: lottery.region
+          });
+        }
+      }
+      
       // Sortear data futura (1 a 30 dias no futuro)
       const dayOffset = Math.floor(Math.random() * 30) + 1;
       const dateTirage = new Date(hoje);
@@ -198,30 +255,6 @@ export default function BonusPage({ onBack }: BonusPageProps) {
     return mockJackpots.sort((a, b) => b.valeur - a.valeur);
   };
 
-  // Gerar resultado aleatório
-  const generateRandomResult = (): Result => {
-    const lotteryIds = Object.keys(lotteries);
-    const lotteryId = lotteryIds[Math.floor(Math.random() * lotteryIds.length)];
-    const numeros: number[] = [];
-    
-    for (let i = 0; i < 6; i++) {
-      let num;
-      do {
-        num = Math.floor(Math.random() * 60) + 1;
-      } while (numeros.includes(num));
-      numeros.push(num);
-    }
-    
-    numeros.sort((a, b) => a - b);
-    
-    return {
-      id: `result_${Date.now()}_${Math.random()}`,
-      loterie: lotteries[lotteryId].name,
-      numeros,
-      horario: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      lotteryId
-    };
-  };
 
   // Gerar notícias mockadas
   const generateNews = (): News[] => {
@@ -266,7 +299,7 @@ export default function BonusPage({ onBack }: BonusPageProps) {
     const lastFourAM = fourAM.getTime() > now ? fourAM.getTime() - 86400000 : fourAM.getTime();
     
     // Versão atual - incrementar quando mudar a estrutura dos dados
-    const currentVersion = '2.0';
+    const currentVersion = '3.0';
     
     // Regenerar se: não existir, versão diferente, ou passou das 4h
     const shouldRegenerate = !storedJackpots || 
@@ -319,15 +352,54 @@ export default function BonusPage({ onBack }: BonusPageProps) {
     }
   }, []);
 
-  // Simulador de resultados em tempo real (novo resultado a cada 3s)
+  // Gerar resultados baseados em dados reais simulados
   useEffect(() => {
-    const interval = setInterval(() => {
-      const newResult = generateRandomResult();
-      setResults(prev => [newResult, ...prev].slice(0, 10));
-    }, 3000);
-    
-    return () => clearInterval(interval);
-  }, []);
+    if (jackpots.length > 0 && results.length === 0) {
+      const generatedResults = jackpots.map((jackpot, index) => {
+        // Calcular se já foi sorteado baseado na data
+        const hoje = new Date(2025, 10, 12);
+        const [day, month, year] = jackpot.date_tirage.split('/');
+        const dataTirage = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        const isSorteado = dataTirage <= hoje;
+        
+        // Apenas fornecer números se tem API E já foi sorteado
+        let numeros: number[] = [];
+        const hasAPI = lotteries[jackpot.lotteryId]?.hasAPI || false;
+        
+        if (hasAPI && isSorteado) {
+          // Gerar números únicos para cada sorteio baseado na data e loteria
+          const seed = parseInt(day) * 1000 + parseInt(month) * 100 + index * 7;
+          const numerosSet = new Set<number>();
+          let attempt = 0;
+          
+          while (numerosSet.size < 6 && attempt < 100) {
+            const num = ((seed * (numerosSet.size + 1) * 13 + attempt * 7) % 49) + 1;
+            numerosSet.add(num);
+            attempt++;
+          }
+          
+          numeros = Array.from(numerosSet).sort((a, b) => a - b);
+          console.log(`${jackpot.loterie} (${jackpot.date_tirage}): hasAPI=${hasAPI}, isSorteado=${isSorteado}, numeros=`, numeros);
+        } else {
+          console.log(`${jackpot.loterie} (${jackpot.date_tirage}): hasAPI=${hasAPI}, isSorteado=${isSorteado}, numeros=VAZIO`);
+        }
+
+        return {
+          id: `result_${jackpot.id}`,
+          loterie: jackpot.loterie,
+          numeros,
+          horario: '20h30',
+          lotteryId: jackpot.lotteryId,
+          dateTirage: jackpot.date_tirage,
+          valeur: jackpot.valeur,
+          isSorteado,
+          hasAPI
+        };
+      });
+      
+      setResults(generatedResults);
+    }
+  }, [jackpots]);
 
   // Calcular horas desde última atualização
   const getHoursSinceUpdate = (): string => {
@@ -335,31 +407,6 @@ export default function BonusPage({ onBack }: BonusPageProps) {
     return hours === 0 ? '< 1h' : `${hours}h`;
   };
 
-  // Comparar com bilhetes do usuário
-  const compareWithTickets = (resultNumeros: number[]) => {
-    const storedHistory = localStorage.getItem('userHistory');
-    if (!storedHistory) {
-      alert('Aucun billet trouvé dans votre historique.');
-      return;
-    }
-    
-    const history: UserHistory[] = JSON.parse(storedHistory);
-    let maxMatches = 0;
-    
-    history.forEach(ticket => {
-      const matches = ticket.numeros.filter(num => resultNumeros.includes(num)).length;
-      if (matches > maxMatches) maxMatches = matches;
-    });
-    
-    setMatchedNumbers(maxMatches);
-    
-    if (maxMatches > 2) {
-      setShowConfetti(true);
-      setTimeout(() => setShowConfetti(false), 3000);
-    }
-    
-    alert(`Meilleur résultat: ${maxMatches} numéro(s) correspondant(s)!`);
-  };
 
   // Abrir link da loteria
   const openLotteryLink = (lotteryId: string) => {
@@ -407,6 +454,145 @@ export default function BonusPage({ onBack }: BonusPageProps) {
 
   const filteredJackpots = getFilteredJackpots();
 
+  // Ordenar e filtrar resultados
+  const getFilteredAndSortedResults = (): Result[] => {
+    let filtered = results;
+
+    // Filtrar por pesquisa
+    if (searchTerm.trim()) {
+      filtered = filtered.filter(r => 
+        r.loterie.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Ordenar: Sorteados primeiro (por valor desc), depois não sorteados (por valor desc)
+    const sorteados = filtered.filter(r => r.isSorteado).sort((a, b) => b.valeur - a.valeur);
+    const naoSorteados = filtered.filter(r => !r.isSorteado).sort((a, b) => b.valeur - a.valeur);
+    
+    return [...sorteados, ...naoSorteados];
+  };
+
+  const sortedResults = getFilteredAndSortedResults();
+  
+  // Paginação
+  const totalPages = Math.ceil(sortedResults.length / resultsPerPage);
+  const startIndex = (currentPage - 1) * resultsPerPage;
+  const paginatedResults = sortedResults.slice(startIndex, startIndex + resultsPerPage);
+
+  // Carregar bilhetes do localStorage
+  useEffect(() => {
+    const storedTickets = localStorage.getItem('lotoGainsTickets');
+    if (storedTickets) {
+      setTickets(JSON.parse(storedTickets));
+    }
+  }, []);
+
+  // Salvar bilhetes no localStorage
+  const saveTickets = (newTickets: Ticket[]) => {
+    setTickets(newTickets);
+    localStorage.setItem('lotoGainsTickets', JSON.stringify(newTickets));
+  };
+
+  // Adicionar bilhete
+  const handleAddTicket = () => {
+    if (!selectedLottery || !ticketNumbers.trim()) {
+      alert('Veuillez choisir une loterie et entrer les numéros');
+      return;
+    }
+
+    const newTicket: Ticket = {
+      id: `ticket_${Date.now()}`,
+      loterie: lotteries[selectedLottery].name,
+      lotteryId: selectedLottery,
+      numeros: ticketNumbers.trim(),
+      note: ticketNote.trim(),
+      dateAdded: new Date().toLocaleDateString('fr-FR')
+    };
+
+    saveTickets([...tickets, newTicket]);
+    
+    // Limpar formulário
+    setSelectedLottery('');
+    setTicketNumbers('');
+    setTicketNote('');
+  };
+
+  // Remover bilhetes selecionados
+  const handleDeleteSelected = () => {
+    if (selectedTickets.length === 0) {
+      alert('Veuillez sélectionner au moins un billet');
+      return;
+    }
+
+    const confirmed = window.confirm(`Êtes-vous sûr de vouloir supprimer ${selectedTickets.length} billet(s) ?`);
+    if (confirmed) {
+      const newTickets = tickets.filter(t => !selectedTickets.includes(t.id));
+      saveTickets(newTickets);
+      setSelectedTickets([]);
+    }
+  };
+
+  // Exportar bilhetes
+  const handleExportTickets = () => {
+    if (tickets.length === 0) {
+      alert('Aucun billet à exporter');
+      return;
+    }
+
+    const dataStr = JSON.stringify(tickets, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `mes_billets_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Importar bilhetes
+  const handleImportTickets = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.onchange = (e: Event) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const importedTickets = JSON.parse(event.target?.result as string);
+            if (Array.isArray(importedTickets)) {
+              saveTickets([...tickets, ...importedTickets]);
+              alert(`${importedTickets.length} billet(s) importé(s) avec succès`);
+            }
+          } catch (error) {
+            alert('Erreur lors de l\'importation du fichier');
+          }
+        };
+        reader.readAsText(file);
+      }
+    };
+    input.click();
+  };
+
+  // Toggle seleção de bilhete
+  const toggleTicketSelection = (ticketId: string) => {
+    setSelectedTickets(prev =>
+      prev.includes(ticketId)
+        ? prev.filter(id => id !== ticketId)
+        : [...prev, ticketId]
+    );
+  };
+
+  // Selecionar/desselecionar todos
+  const toggleSelectAll = () => {
+    if (selectedTickets.length === tickets.length) {
+      setSelectedTickets([]);
+    } else {
+      setSelectedTickets(tickets.map(t => t.id));
+    }
+  };
+
   const bgColor = darkMode 
     ? 'bg-gray-900' 
     : 'bg-gradient-to-br from-[#2BC047]/5 via-white to-[#F7D25F]/10';
@@ -444,28 +630,8 @@ export default function BonusPage({ onBack }: BonusPageProps) {
         </div>
       </div>
 
-      {/* Confetti Effect */}
-      {showConfetti && (
-        <div className="fixed inset-0 pointer-events-none z-50">
-          {[...Array(50)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute animate-fall"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: '-10px',
-                animationDelay: `${Math.random() * 2}s`,
-                animationDuration: `${2 + Math.random() * 2}s`
-              }}
-            >
-              <Sparkles className="text-[#F7D25F]" size={20} />
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8 pb-24">
+      <div className="max-w-7xl mx-auto px-4 py-8 pb-32">
         {/* Module Selection Cards */}
         {!activeModule && (
           <div className="grid md:grid-cols-3 gap-6 mb-8">
@@ -491,7 +657,7 @@ export default function BonusPage({ onBack }: BonusPageProps) {
               </h3>
             </button>
 
-            {/* Résultats en Temps Réel */}
+            {/* Loto Gains */}
             <button
               onClick={() => setActiveModule('results')}
               className={`interactive ${cardBg} border-2 rounded-2xl shadow-xl hover:shadow-2xl transition-all hover:scale-105 p-6 text-center group`}
@@ -500,16 +666,16 @@ export default function BonusPage({ onBack }: BonusPageProps) {
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center">
                     <div className="text-6xl font-black text-white mb-2" style={{ textShadow: '3px 3px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 4px 4px 8px rgba(0,0,0,0.3)' }}>
-                      RÉSULTATS
+                      LOTO
                     </div>
                     <div className="text-3xl font-black text-[#F7D25F]" style={{ textShadow: '2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000' }}>
-                      EN TEMPS RÉEL
+                      GAINS
                     </div>
                   </div>
                 </div>
               </div>
               <h3 className={`text-lg font-bold ${darkMode ? 'text-[#2BC047]' : 'text-[#18A238]'} group-hover:text-[#2BC047] transition-colors`}>
-                Résultats en temps réel
+                Loto Gains
               </h3>
             </button>
 
@@ -677,7 +843,7 @@ export default function BonusPage({ onBack }: BonusPageProps) {
           </div>
         )}
 
-        {/* Módulo 2: Resultados em Tempo Real */}
+        {/* Módulo 2: Loto Gains */}
         {activeModule === 'results' && (
           <div>
             <button
@@ -688,55 +854,450 @@ export default function BonusPage({ onBack }: BonusPageProps) {
               <span className="font-medium">Retour aux modules</span>
             </button>
 
-            <section className={`${cardBg} border rounded-2xl p-6 shadow-xl`}>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className={`text-2xl font-bold flex items-center gap-2 ${textColor}`}>
-                  <TrendingUp className="text-[#2BC047]" />
-                  Résultats en Temps Réel
-                </h2>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-[#2BC047] rounded-full animate-pulse" />
-                  <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>En direct</span>
+            {/* Hero Section */}
+            <div className={`${darkMode ? 'bg-gradient-to-r from-[#1a7a2e] to-[#2BC047]' : 'bg-gradient-to-r from-[#2BC047] to-[#18A238]'} text-white rounded-2xl p-8 mb-6 shadow-xl`}>
+              <h1 className="text-3xl md:text-4xl font-bold mb-4 text-center">
+                LotoGains
+              </h1>
+              <h2 className="text-xl md:text-2xl font-semibold mb-3 text-center">
+                Résultats en temps réel
+              </h2>
+              <p className="text-sm text-center opacity-90">
+                Alerte gagnant instantanée
+              </p>
+            </div>
+
+            {/* Como usar LotoGains */}
+            <div className={`${cardBg} border rounded-2xl p-6 mb-6 shadow-xl`}>
+              <h3 className={`text-xl font-bold mb-4 ${textColor}`}>Comment utiliser LotoGains</h3>
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-[#2BC047] text-white flex items-center justify-center font-bold flex-shrink-0">
+                    1
+                  </div>
+                  <p className={`${textColor} text-sm pt-1`}>Ajoutez vos billets dans "Mes billets"</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-[#2BC047] text-white flex items-center justify-center font-bold flex-shrink-0">
+                    2
+                  </div>
+                  <p className={`${textColor} text-sm pt-1`}>Les résultats se mettent à jour automatiquement</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-[#2BC047] text-white flex items-center justify-center font-bold flex-shrink-0">
+                    3
+                  </div>
+                  <p className={`${textColor} text-sm pt-1`}>Recevez une alerte instantanée quand vous gagnez !</p>
                 </div>
               </div>
+            </div>
 
-              {results.length === 0 ? (
-                <div className={`text-center py-8 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Chargement des résultats...
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {results.map((result) => (
-                    <div
-                      key={result.id}
-                      className={`${darkMode ? 'bg-gray-700' : 'bg-gradient-to-r from-[#2BC047]/10 to-[#F7D25F]/10'} rounded-xl p-4 border ${darkMode ? 'border-gray-600' : 'border-[#2BC047]/20'}`}
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className={`text-lg font-bold ${textColor}`}>{result.loterie}</h3>
-                        <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{result.horario}</span>
-                      </div>
-                      <div className="flex gap-2 mb-3 flex-wrap">
-                        {result.numeros.map((num) => (
-                          <div
-                            key={num}
-                            className="w-12 h-12 bg-gradient-to-br from-[#2BC047] to-[#18A238] text-white rounded-full flex items-center justify-center font-bold text-lg shadow-lg"
-                          >
-                            {num}
-                          </div>
-                        ))}
-                      </div>
-                      <button
-                        onClick={() => compareWithTickets(result.numeros)}
-                        className="w-full bg-gradient-to-r from-[#2BC047] to-[#18A238] hover:shadow-lg text-white px-4 py-2 rounded-lg font-semibold transition-all flex items-center justify-center gap-2"
+            {/* Tabs Navigation */}
+            <div className={`${cardBg} border rounded-2xl shadow-xl overflow-hidden`}>
+              <div className="flex border-b">
+                <button
+                  onClick={() => setLotoGainsTab('resultats')}
+                  className={`flex-1 px-4 py-3 font-semibold transition-all ${
+                    lotoGainsTab === 'resultats'
+                      ? 'bg-[#2BC047] text-white border-b-4 border-[#18A238]'
+                      : `${textColor} hover:bg-[#2BC047]/10`
+                  }`}
+                >
+                  Résultats
+                </button>
+                <button
+                  onClick={() => setLotoGainsTab('mes-billets')}
+                  className={`flex-1 px-4 py-3 font-semibold transition-all border-l ${
+                    lotoGainsTab === 'mes-billets'
+                      ? 'bg-[#2BC047] text-white border-b-4 border-[#18A238]'
+                      : `${textColor} hover:bg-[#2BC047]/10`
+                  }`}
+                >
+                  Mes billets
+                </button>
+              </div>
+
+              <div className="p-6 pb-12">
+                {/* Tab 1: Résultats */}
+                {lotoGainsTab === 'resultats' && (
+                  <div>
+                    {/* Barra de pesquisa */}
+                    <div className="flex gap-3 mb-6">
+                      <input
+                        type="text"
+                        placeholder="Rechercher..."
+                        value={searchTerm}
+                        onChange={(e) => {
+                          setSearchTerm(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                        className={`flex-1 px-4 py-2 rounded-lg border ${
+                          darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-800'
+                        } focus:outline-none focus:border-[#2BC047]`}
+                      />
+                      <button 
+                        onClick={() => setCurrentPage(1)}
+                        className="bg-[#2BC047] hover:bg-[#18A238] text-white px-6 py-2 rounded-lg font-semibold transition-all flex items-center gap-2"
                       >
-                        <CheckCircle2 size={18} />
-                        Comparer avec mes billets
+                        <span>Chercher</span>
                       </button>
                     </div>
-                  ))}
-                </div>
-              )}
-            </section>
+
+                    {/* Tabela de Resultados */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className={`${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                          <tr>
+                            <th className={`px-4 py-3 text-left text-sm font-bold ${textColor}`}>Loterie</th>
+                            <th className={`px-4 py-3 text-left text-sm font-bold ${textColor}`}>Date du tirage</th>
+                            <th className={`px-4 py-3 text-left text-sm font-bold ${textColor}`}>Numéros</th>
+                            <th className={`px-4 py-3 text-left text-sm font-bold ${textColor}`}>Gains</th>
+                            <th className={`px-4 py-3 text-left text-sm font-bold ${textColor}`}>Statut</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sortedResults.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="text-center py-8">
+                                <div className={`${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                  {results.length === 0 ? 'Chargement des résultats...' : 'Aucun résultat trouvé'}
+                                </div>
+                              </td>
+                            </tr>
+                          ) : (
+                            paginatedResults.map((result) => (
+                              <tr
+                                key={result.id}
+                                className={`border-b ${darkMode ? 'border-gray-700 hover:bg-gray-700' : 'border-gray-200 hover:bg-gray-50'} transition-colors ${
+                                  result.isSorteado ? (darkMode ? 'bg-green-900/20' : 'bg-green-50/50') : ''
+                                }`}
+                              >
+                                <td className={`px-4 py-4 font-semibold`}>
+                                  <div className="flex flex-col gap-2">
+                                    <span className={textColor}>{result.loterie}</span>
+                                    
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      {/* Lógica de Badges */}
+                                      {result.hasAPI ? (
+                                        <>
+                                          {result.isSorteado ? (
+                                            <>
+                                              <span className="text-xs bg-[#2BC047] text-white px-2 py-1 rounded-full font-bold">
+                                                Déjà tiré
+                                              </span>
+                                              <span className="text-xs bg-blue-500 text-white px-2 py-1 rounded-full font-bold">
+                                                Numéros disponibles
+                                              </span>
+                                            </>
+                                          ) : (
+                                            <span className="text-xs bg-orange-500 text-white px-2 py-1 rounded-full font-bold">
+                                              Pas encore tiré
+                                            </span>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <span className="text-xs bg-gray-500 text-white px-2 py-1 rounded-full font-bold">
+                                          Numéros indisponibles
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className={`px-4 py-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                                  {result.dateTirage} {result.horario}
+                                </td>
+                                <td className="px-4 py-4">
+                                  {result.hasAPI && result.isSorteado && result.numeros.length > 0 ? (
+                                    <div className="flex gap-1 flex-wrap">
+                                      {result.numeros.map((num) => (
+                                        <span
+                                          key={num}
+                                          className={`inline-block min-w-[28px] text-center text-xs font-bold px-1 ${textColor}`}
+                                        >
+                                          {num}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} italic`}>
+                                      Indisponible
+                                    </span>
+                                  )}
+                                </td>
+                                <td className={`px-4 py-4 ${textColor} font-bold`}>
+                                  {result.valeur.toLocaleString('fr-FR', {
+                                    style: 'currency',
+                                    currency: 'EUR',
+                                    maximumFractionDigits: 0,
+                                  })}
+                                </td>
+                                <td className={`px-4 py-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                                  {result.isSorteado ? 'Résultats officiels' : 'En attente'}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Paginação */}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-center gap-4 mt-6">
+                        <button
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                          className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                            currentPage === 1
+                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                              : 'bg-[#2BC047] hover:bg-[#18A238] text-white'
+                          }`}
+                        >
+                          Précédent
+                        </button>
+                        <span className={`${textColor} font-semibold`}>
+                          Page {currentPage} sur {totalPages}
+                        </span>
+                        <button
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          disabled={currentPage === totalPages}
+                          className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                            currentPage === totalPages
+                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                              : 'bg-[#2BC047] hover:bg-[#18A238] text-white'
+                          }`}
+                        >
+                          Suivant
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Informações */}
+                    <div className={`text-center mt-6 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      <p>Total de {sortedResults.length} résultats | Affichage {startIndex + 1}-{Math.min(startIndex + resultsPerPage, sortedResults.length)}</p>
+                      <p className="mt-1">Dernière mise à jour : {new Date().toLocaleDateString('fr-FR')} {new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
+                    </div>
+
+                    {/* Informations importantes */}
+                    <div className={`${darkMode ? 'bg-gray-700' : 'bg-blue-50'} border-2 ${darkMode ? 'border-gray-600' : 'border-blue-200'} rounded-xl p-6 mt-8`}>
+                      <h3 className={`text-lg font-bold mb-4 flex items-center gap-2 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Informations importantes
+                      </h3>
+
+                      <div className={`space-y-3 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <p className="text-sm leading-relaxed">
+                          ⚠️ Les résultats affichés sont fournis à titre informatif. Vérifiez toujours les résultats officiels sur les sites des loteries concernées avant de procéder à toute réclamation.
+                        </p>
+                        <p className="text-sm leading-relaxed">
+                          ⚠️ LotoGains ne garantit pas l'exactitude des résultats affichés et décline toute responsabilité en cas d'erreur.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tab 2: Mes billets */}
+                {lotoGainsTab === 'mes-billets' && (
+                  <div className="pb-12">
+                    {/* Formulário para adicionar bilhete */}
+                    <div className={`${darkMode ? 'bg-gray-700' : 'bg-gray-50'} rounded-xl p-6 mb-6`}>
+                      <h3 className={`text-xl font-bold mb-4 ${textColor} flex items-center gap-2`}>
+                        <svg className="w-6 h-6 text-[#2BC047]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Mes billets
+                      </h3>
+
+                      <div className="grid md:grid-cols-2 gap-4 mb-4">
+                        {/* Seleção de loteria */}
+                        <div>
+                          <label className={`block text-sm font-semibold mb-2 ${textColor}`}>
+                            Loterie
+                          </label>
+                          <select
+                            value={selectedLottery}
+                            onChange={(e) => setSelectedLottery(e.target.value)}
+                            className={`w-full px-4 py-3 rounded-lg border ${
+                              darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-300 text-gray-800'
+                            } focus:outline-none focus:border-[#2BC047]`}
+                          >
+                            <option value="">Choisissez une loterie</option>
+                            {Object.keys(lotteries).map((lotteryId) => (
+                              <option key={lotteryId} value={lotteryId}>
+                                {lotteries[lotteryId].name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Números jogados */}
+                        <div>
+                          <label className={`block text-sm font-semibold mb-2 ${textColor}`}>
+                            Numéros joués
+                          </label>
+                          <input
+                            type="text"
+                            value={ticketNumbers}
+                            onChange={(e) => setTicketNumbers(e.target.value)}
+                            placeholder="Ex: 01 12 23 34 45 + 07"
+                            className={`w-full px-4 py-3 rounded-lg border ${
+                              darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-300 text-gray-800'
+                            } focus:outline-none focus:border-[#2BC047]`}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Note opcional */}
+                      <div className="mb-4">
+                        <label className={`block text-sm font-semibold mb-2 ${textColor}`}>
+                          Note (optionnel)
+                        </label>
+                        <input
+                          type="text"
+                          value={ticketNote}
+                          onChange={(e) => setTicketNote(e.target.value)}
+                          placeholder="Note pour ce billet"
+                          className={`w-full px-4 py-3 rounded-lg border ${
+                            darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-300 text-gray-800'
+                          } focus:outline-none focus:border-[#2BC047]`}
+                        />
+                      </div>
+
+                      {/* Botão adicionar */}
+                      <button
+                        onClick={handleAddTicket}
+                        className="w-full bg-[#2BC047] hover:bg-[#18A238] text-white px-6 py-4 rounded-lg font-bold transition-all flex items-center justify-center gap-2 text-lg"
+                      >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Ajouter ce billet
+                      </button>
+                    </div>
+
+                    {/* Lista de bilhetes salvos */}
+                    <div className={`${darkMode ? 'bg-gray-700' : 'bg-gray-50'} rounded-xl p-6 mb-8`}>
+                      <h3 className={`text-xl font-bold mb-4 ${textColor} flex items-center gap-2`}>
+                        <svg className="w-6 h-6 text-[#2BC047]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                        </svg>
+                        Mes billets enregistrés
+                      </h3>
+
+                      {/* Botões de ação */}
+                      <div className="flex flex-wrap gap-3 mb-4">
+                        <button
+                          onClick={handleImportTickets}
+                          className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 text-sm"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                          </svg>
+                          Importer
+                        </button>
+                        <button
+                          onClick={handleExportTickets}
+                          disabled={tickets.length === 0}
+                          className={`px-3 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 text-sm ${
+                            tickets.length === 0
+                              ? 'bg-gray-400 text-gray-300 cursor-not-allowed'
+                              : 'bg-gray-600 hover:bg-gray-500 text-white'
+                          }`}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          Exporter
+                        </button>
+                        <button
+                          onClick={handleDeleteSelected}
+                          disabled={selectedTickets.length === 0}
+                          className={`px-3 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 text-sm ${
+                            selectedTickets.length === 0
+                              ? 'bg-gray-400 text-gray-300 cursor-not-allowed'
+                              : 'bg-red-600 hover:bg-red-500 text-white'
+                          }`}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          Supprimer
+                        </button>
+                      </div>
+
+                      {/* Tabela de bilhetes */}
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className={`${darkMode ? 'bg-gray-600' : 'bg-white'}`}>
+                            <tr>
+                              <th className="px-4 py-3 text-left">
+                                <input
+                                  type="checkbox"
+                                  checked={tickets.length > 0 && selectedTickets.length === tickets.length}
+                                  onChange={toggleSelectAll}
+                                  className="w-4 h-4 rounded border-gray-300"
+                                />
+                              </th>
+                              <th className={`px-4 py-3 text-left text-sm font-bold ${textColor}`}>Loterie</th>
+                              <th className={`px-4 py-3 text-left text-sm font-bold ${textColor}`}>Numéros</th>
+                              <th className={`px-4 py-3 text-left text-sm font-bold ${textColor}`}>Résultat</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tickets.length === 0 ? (
+                              <tr>
+                                <td colSpan={4} className="text-center py-12">
+                                  <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'} text-lg`}>
+                                    Aucun billet enregistré
+                                  </p>
+                                </td>
+                              </tr>
+                            ) : (
+                              tickets.map((ticket) => (
+                                <tr
+                                  key={ticket.id}
+                                  className={`border-b ${darkMode ? 'border-gray-600 hover:bg-gray-600' : 'border-gray-200 hover:bg-white'} transition-colors`}
+                                >
+                                  <td className="px-4 py-4">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedTickets.includes(ticket.id)}
+                                      onChange={() => toggleTicketSelection(ticket.id)}
+                                      className="w-4 h-4 rounded border-gray-300"
+                                    />
+                                  </td>
+                                  <td className={`px-4 py-4 ${textColor} font-semibold`}>
+                                    <div>
+                                      {ticket.loterie}
+                                      {ticket.note && (
+                                        <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-1`}>
+                                          {ticket.note}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className={`px-4 py-4 ${textColor}`}>
+                                    <span className="font-mono">{ticket.numeros}</span>
+                                  </td>
+                                  <td className="px-4 py-4">
+                                    <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                                      -
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -795,19 +1356,6 @@ export default function BonusPage({ onBack }: BonusPageProps) {
           </div>
         )}
       </div>
-
-      <style>{`
-        @keyframes fall {
-          to {
-            transform: translateY(100vh) rotate(360deg);
-            opacity: 0;
-          }
-        }
-        
-        .animate-fall {
-          animation: fall linear forwards;
-        }
-      `}</style>
     </div>
   );
 }
