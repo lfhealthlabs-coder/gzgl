@@ -1,6 +1,6 @@
-import { Home, Newspaper, Users, User } from 'lucide-react';
+import { Home, Newspaper, Users, User, Trophy } from 'lucide-react';
 
-export type TabType = 'accueil' | 'actualite' | 'communaute' | 'profil';
+export type TabType = 'accueil' | 'actualite' | 'communaute' | 'profil' | 'bonus';
 
 interface BottomNavProps {
   activeTab: TabType;
@@ -11,6 +11,7 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   const tabs = [
     { id: 'accueil' as TabType, label: 'Accueil', icon: Home },
     { id: 'actualite' as TabType, label: "Fil d'actualité", icon: Newspaper },
+    { id: 'bonus' as TabType, label: 'Bonus', icon: Trophy },
     { id: 'communaute' as TabType, label: 'Communauté', icon: Users },
     { id: 'profil' as TabType, label: 'Profil', icon: User },
   ];
@@ -18,7 +19,7 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl z-50">
       <div className="max-w-screen-xl mx-auto px-4">
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-5 gap-2">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;

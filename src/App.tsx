@@ -11,6 +11,7 @@ import FloatingSupportButton from './components/FloatingSupportButton';
 import IAPage from './pages/AI';
 import TurboPage from './pages/TurboPage';
 import BonusPage from './pages/BonusPage';
+import LotoGains10xPage from './pages/LotoGains10xPage';
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -64,6 +65,15 @@ function App() {
       );
     }
 
+    if (selectedFeature === '10x') {
+      return (
+        <>
+          <CustomCursor />
+          <LotoGains10xPage onBack={handleBackToHome} />
+        </>
+      );
+    }
+
     return (
       <>
         <CustomCursor />
@@ -78,7 +88,6 @@ function App() {
       <div className="min-h-screen">
         {activeTab === 'accueil' && <AccueilPage onFeatureClick={handleFeatureClick} />}
         {activeTab === 'actualite' && <ActualitePage />}
-        {activeTab === 'bonus' && <BonusPage onBack={handleBackToHome} />}
         {activeTab === 'communaute' && <CommunautePage />}
         {activeTab === 'profil' && <ProfilPage />}
 
