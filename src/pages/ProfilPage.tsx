@@ -13,7 +13,11 @@ interface ToastState {
   type: ToastType;
 }
 
-export default function ProfilPage() {
+interface ProfilPageProps {
+  onLogout?: () => void;
+}
+
+export default function ProfilPage({ onLogout }: ProfilPageProps) {
   const [profile, setProfile] = useState<UserProfile>({ name: '', email: '', photoUrl: null });
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
@@ -89,6 +93,15 @@ export default function ProfilPage() {
     setToast({ show: true, message, type });
   };
 
+  const handleLogoutClick = () => {
+    if (onLogout) {
+      onLogout();
+      showToast('Déconnexion réussie !', 'success');
+    } else {
+      showToast('Déconnexion en cours...', 'info');
+    }
+  };
+
   const menuItems = [
     { 
       icon: Bell, 
@@ -107,10 +120,7 @@ export default function ProfilPage() {
       icon: LogOut, 
       label: 'Déconnexion', 
       color: 'from-red-500 to-red-600', 
-      action: () => {
-        // Futura implementação de logout
-        showToast('Déconnexion en cours...', 'info');
-      } 
+      action: handleLogoutClick
     },
   ];
 

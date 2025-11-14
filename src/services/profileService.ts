@@ -32,7 +32,8 @@ export async function getProfile(): Promise<UserProfile> {
     const defaultProfile = {
       name: 'Utilisateur',
       email,
-      photo_url: null
+      photo_url: null,
+      last_login_at: new Date().toISOString()
     };
 
     const { error: insertError } = await supabase
@@ -50,10 +51,64 @@ export async function getProfile(): Promise<UserProfile> {
     };
   }
 
+  // Atualizar último acesso
+  await supabase
+    .from('user_profiles')
+    .update({ ultimo_acesso: new Date().toISOString() })
+    .eq('email', email);
+
   return {
     name: data.name,
     email: data.email,
     photoUrl: data.photo_url
+  };
+}
+
+/**
+ * Cria ou atualiza o perfil do usuário ao fazer login
+ */
+export async function loginUser(email: string): Promise<UserProfile> {
+  // Verificar se o perfil já existe
+  const { data: existingProfile } = await supabase
+    .from('user_profiles')
+    .select('*')
+    .eq('email', email)
+    .single();
+
+  if (existingProfile) {
+    // Atualizar último acesso
+    await supabase
+      .from('user_profiles')
+      .update({ ultimo_acesso: new Date().toISOString() })
+      .eq('email', email);
+
+    return {
+      name: existingProfile.name,
+      email: existingProfile.email,
+      photoUrl: existingProfile.photo_url
+    };
+  }
+
+  // Criar novo perfil
+  const newProfile = {
+    name: 'Utilisateur',
+    email,
+    photo_url: null,
+    ultimo_acesso: new Date().toISOString()
+  };
+
+  const { error } = await supabase
+    .from('user_profiles')
+    .insert(newProfile);
+
+  if (error) {
+    console.error('Erro ao criar perfil no login:', error);
+  }
+
+  return {
+    name: newProfile.name,
+    email: newProfile.email,
+    photoUrl: newProfile.photo_url
   };
 }
 
