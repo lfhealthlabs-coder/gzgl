@@ -25,9 +25,13 @@ export default function ProfilPage() {
 
   // Carrega o perfil ao montar o componente
   useEffect(() => {
-    const userProfile = getProfile();
-    setProfile(userProfile);
-    setEditName(userProfile.name);
+    const loadProfile = async () => {
+      const userProfile = await getProfile();
+      setProfile(userProfile);
+      setEditName(userProfile.name);
+    };
+    
+    loadProfile();
     
     // Carrega contagem de notificações não lidas
     setUnreadNotifications(getUnreadCount());

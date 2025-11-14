@@ -65,25 +65,11 @@ export default function HelpModal({ isOpen, onClose }: HelpModalProps) {
 
   const contactMethods = [
     {
-      icon: MessageCircle,
-      label: "WhatsApp",
-      value: "+33 6 12 34 56 78",
-      href: "https://wa.me/33612345678",
-      color: "from-green-500 to-green-600"
-    },
-    {
       icon: Mail,
       label: "Email",
-      value: "support@lottoapp.com",
+      value: "lfhealthlabs@gmail.com",
       href: "mailto:support@lottoapp.com",
       color: "from-blue-500 to-blue-600"
-    },
-    {
-      icon: Phone,
-      label: "Téléphone",
-      value: "+33 1 23 45 67 89",
-      href: "tel:+33123456789",
-      color: "from-purple-500 to-purple-600"
     }
   ];
 
