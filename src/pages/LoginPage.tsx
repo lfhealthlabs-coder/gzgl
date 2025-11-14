@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { loginUser } from '../services/profileService';
 
 interface LoginPageProps {
   onLogin: () => void;
@@ -8,6 +9,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [showInstall, setShowInstall] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -17,7 +19,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!email.includes('@')) {
@@ -26,9 +28,22 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     }
 
     setError('');
-    // Salva o email no localStorage para ser usado no perfil
-    localStorage.setItem('user_email', email);
-    onLogin();
+    setIsLoading(true);
+
+    try {
+      // Criar/atualizar perfil no Supabase
+      await loginUser(email);
+      
+      // Salva o email no localStorage para manter logado
+      localStorage.setItem('user_email', email);
+      localStorage.setItem('user_logged_in', 'true');
+      
+      onLogin();
+    } catch (error) {
+      console.error('Erro no login:', error);
+      setError('Erreur lors de la connexion. Veuillez réessayer.');
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -113,9 +128,10 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
             <button
               type="submit"
-              className="interactive w-full bg-gradient-to-r from-[#18A238] to-[#0B5F21] hover:from-[#0B5F21] hover:to-[#0B5F21] text-white font-bold py-4 rounded-2xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+              disabled={isLoading}
+              className="interactive w-full bg-gradient-to-r from-[#18A238] to-[#0B5F21] hover:from-[#0B5F21] hover:to-[#0B5F21] text-white font-bold py-4 rounded-2xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Entrer
+              {isLoading ? 'Connexion...' : 'Entrer'}
             </button>
           </form>
         </div>

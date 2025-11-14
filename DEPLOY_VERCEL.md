@@ -384,6 +384,40 @@ No deploy Vercel, ele funciona automaticamente se o usuário acessar via HTTPS (
 
 ---
 
+## 📊 Vercel Analytics
+
+**✅ Já está integrado no projeto!**
+
+O Vercel Analytics vai começar a funcionar automaticamente após o deploy. Você verá:
+
+### Como acessar:
+
+1. Vercel Dashboard > Seu projeto
+2. Clique na aba **"Analytics"**
+3. Veja as métricas:
+   - 📈 Page views (visualizações de página)
+   - 👥 Visitors (visitantes únicos)
+   - 🌍 Top pages (páginas mais visitadas)
+   - 📍 Top countries (países de acesso)
+   - 📱 Devices (desktop vs mobile)
+
+### O que é rastreado:
+
+- ✅ Páginas visitadas
+- ✅ Navegação entre páginas
+- ✅ Tempo de carregamento
+- ✅ Performance do site
+- ✅ Localização dos visitantes
+
+### Quando começa a coletar dados:
+
+- Os dados aparecem **após 30 segundos** do primeiro acesso
+- Se não aparecer, desative bloqueadores de anúncios e navegue entre páginas
+
+**Nota:** O Analytics está no código (`src/App.tsx`) e funciona automaticamente no Vercel! 🎉
+
+---
+
 ## 🎉 Pronto!
 
 Depois do deploy:
@@ -393,6 +427,7 @@ Depois do deploy:
 3. ✅ Deploy automático a cada push
 4. ✅ HTTPS habilitado
 5. ✅ PWA funcionando
+6. ✅ **Analytics ativo** 📊
 
 **Compartilhe o link e use! 🚀**
 
