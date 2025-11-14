@@ -4,12 +4,15 @@ import {
   Bolt,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Building2 as CityIcon,
   ExternalLink,
   Loader2,
   MapPin,
   Moon,
   Sun,
+  Save,
+  Volume2,
 } from "lucide-react";
 
 /** =========================
@@ -39,6 +42,15 @@ type CountryConfig = {
 };
 
 type LocationData = Record<CountryCode, CountryConfig>;
+
+type SavedCombination = {
+  id: string;
+  mainNumbers: number[];
+  specialNumbers: number[];
+  lotteryName: string;
+  lotteryId: string;
+  timestamp: number;
+};
 
 /** =========================
  *  DADOS (portados do B)
@@ -387,6 +399,27 @@ function formatNextDraw(l: Lottery): string {
   return `Prochain tirage : ${target.toLocaleDateString("fr-FR", opts)}`;
 }
 
+function getDrawProgress(l: Lottery): number {
+  const now = new Date();
+  const today = now.getDay();
+  let days = l.drawDay - today;
+  const currentHour = now.getHours();
+  if (days < 0 || (days === 0 && currentHour >= l.drawHour)) days += 7;
+  
+  const lastDraw = new Date(now);
+  lastDraw.setDate(now.getDate() - (7 - days));
+  lastDraw.setHours(l.drawHour, 0, 0, 0);
+  
+  const nextDraw = new Date(now);
+  nextDraw.setDate(now.getDate() + days);
+  nextDraw.setHours(l.drawHour, 0, 0, 0);
+  
+  const total = nextDraw.getTime() - lastDraw.getTime();
+  const elapsed = now.getTime() - lastDraw.getTime();
+  
+  return Math.min(100, Math.max(0, (elapsed / total) * 100));
+}
+
 /** =========================
  *  COMPONENTE PRINCIPAL
  *  ========================= */
@@ -411,6 +444,16 @@ export default function IAPage({ onBack }: { onBack: () => void }) {
   const [cooldownSeconds, setCooldownSeconds] = useState<number>(300); // 5 minutos
   const [secondsLeft, setSecondsLeft] = useState<number>(0);
   const cooldownRef = useRef<number | null>(null);
+  
+  // Histórico de combinações
+  const [savedCombinations, setSavedCombinations] = useState<SavedCombination[]>(() => {
+    const saved = localStorage.getItem("savedCombinations");
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [showSaveSuccess, setShowSaveSuccess] = useState(false);
+  
+  // Audio para efeitos
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const [turboCode, setTurboCode] = useState("");
   const [turboActive, setTurboActive] = useState<boolean>(() => {
@@ -565,11 +608,11 @@ export default function IAPage({ onBack }: { onBack: () => void }) {
 
   function fireConfetti() {
     const colors = ["#00C853", "#FFD700", "#FFFFFF", "#009624", "#FFC400"];
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 80; i++) {
       const el = document.createElement("div");
       el.style.position = "fixed";
-      el.style.width = "10px";
-      el.style.height = "10px";
+      el.style.width = Math.random() * 8 + 6 + "px";
+      el.style.height = Math.random() * 8 + 6 + "px";
       el.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
       el.style.borderRadius = "50%";
       el.style.left = Math.random() * 100 + "vw";
@@ -582,243 +625,454 @@ export default function IAPage({ onBack }: { onBack: () => void }) {
     }
   }
 
+  function playSaveSound() {
+    try {
+      const audio = new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZSR");
+      audio.volume = 0.3;
+      audio.play().catch(() => {});
+    } catch (e) {}
+  }
+
+  function saveCombination() {
+    if (!currentLottery || mainNumbers.length === 0) return;
+    
+    const newCombination: SavedCombination = {
+      id: Date.now().toString(),
+      mainNumbers: [...mainNumbers],
+      specialNumbers: [...specialNumbers],
+      lotteryName: currentLottery.name,
+      lotteryId: currentLottery.id,
+      timestamp: Date.now(),
+    };
+
+    const updated = [newCombination, ...savedCombinations].slice(0, 10); // Máximo 10 combinações
+    setSavedCombinations(updated);
+    localStorage.setItem("savedCombinations", JSON.stringify(updated));
+    
+    // Mostrar feedback
+    setShowSaveSuccess(true);
+    setTimeout(() => setShowSaveSuccess(false), 3000);
+    
+    // Efeitos
+    fireConfetti();
+    playSaveSound();
+  }
+
+  function deleteCombination(id: string) {
+    const updated = savedCombinations.filter(c => c.id !== id);
+    setSavedCombinations(updated);
+    localStorage.setItem("savedCombinations", JSON.stringify(updated));
+  }
+
   const canGenerate = !!currentLottery && !!selectedCountry && !!selectedCity && !!selectedLotteryId;
   const canGenerateMore = turboActive || secondsLeft === 0;
 
   return (
-    <div className="min-h-screen bg-white text-[#121212] relative">
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50 text-gray-800 relative overflow-hidden pb-20">
       {/* keyframes locais */}
       <style>{`
-        @keyframes floatUp { 0%{transform: translateY(0) rotate(0deg);} 100%{transform: translateY(-100vh) rotate(360deg);} }
-        @keyframes confettiFall { 0%{transform: translateY(0) rotate(0deg);} 100%{transform: translateY(100vh) rotate(720deg);} }
+        @keyframes floatUp { 
+          0%{transform: translateY(0) rotate(0deg);} 
+          100%{transform: translateY(-100vh) rotate(360deg);} 
+        }
+        @keyframes confettiFall { 
+          0%{transform: translateY(0) rotate(0deg);} 
+          100%{transform: translateY(100vh) rotate(720deg);} 
+        }
+        @keyframes fadeInUp {
+          0% { opacity: 0; transform: translateY(20px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInScale {
+          0% { opacity: 0; transform: scale(0.9); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+        @keyframes slideInRight {
+          0% { opacity: 0; transform: translateX(20px); }
+          100% { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes particleFloat {
+          0%, 100% { transform: translateY(0) scale(1); opacity: 0.2; }
+          50% { transform: translateY(-30px) scale(1.2); opacity: 0.4; }
+        }
+        @keyframes goldenPulse {
+          0%, 100% { 
+            box-shadow: 0 4px 20px rgba(234, 179, 8, 0.4),
+                        0 8px 40px rgba(250, 204, 21, 0.3);
+          }
+          50% { 
+            box-shadow: 0 4px 30px rgba(234, 179, 8, 0.6),
+                        0 8px 60px rgba(250, 204, 21, 0.5);
+          }
+        }
+        .animate-fadeInUp {
+          animation: fadeInUp 0.5s ease-out forwards;
+        }
+        .animate-fadeInScale {
+          animation: fadeInScale 0.4s ease-out forwards;
+        }
+        .animate-slideInRight {
+          animation: slideInRight 0.4s ease-out forwards;
+        }
+        .particle-light {
+          position: absolute;
+          width: 6px;
+          height: 6px;
+          background: radial-gradient(circle, rgba(251, 191, 36, 0.8), transparent);
+          border-radius: 50%;
+          animation: particleFloat 4s ease-in-out infinite;
+        }
+        .golden-glow {
+          text-shadow: 0 0 20px rgba(251, 191, 36, 0.6),
+                       0 0 40px rgba(245, 158, 11, 0.4),
+                       0 0 60px rgba(217, 119, 6, 0.3);
+        }
+        /* Custom scrollbar */
+        .scrollbar-thin::-webkit-scrollbar {
+          height: 8px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-track {
+          background: rgba(251, 191, 36, 0.1);
+          border-radius: 10px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+          background: linear-gradient(to right, #F59E0B, #FBBF24);
+          border-radius: 10px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+          background: linear-gradient(to right, #D97706, #F59E0B);
+        }
       `}</style>
 
-      {/* Partículas */}
+      {/* Background decorative elements */}
+      <div className="absolute inset-0 overflow-hidden opacity-20 pointer-events-none">
+        {Array.from({ length: 15 }).map((_, i) => (
+          <div
+            key={i}
+            className="particle-light"
+            style={{
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              animationDelay: `${Math.random() * 5}s`,
+              animationDuration: `${4 + Math.random() * 4}s`
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Partículas douradas */}
       <div ref={particlesRef} className="pointer-events-none fixed inset-0 -z-10" />
 
-      {/* Top bar com botão de voltar (full screen) */}
-      <div className="px-4 py-3">
+      {/* Header */}
+      <header className="relative z-10 flex items-center justify-between p-4 border-b border-yellow-200 bg-white/50 backdrop-blur-sm">
         <button
           onClick={onBack}
-          className="inline-flex items-center gap-2 text-[#00C853] font-bold text-sm"
+          className="flex items-center gap-2 px-4 py-2 bg-yellow-100 hover:bg-yellow-200 text-yellow-900 rounded-lg transition-all font-semibold"
         >
-          <ArrowLeft className="w-4 h-4" />
-          Retour
+          <ArrowLeft size={20} />
+          <span>Retour</span>
         </button>
-      </div>
-
-      {/* Header */}
-      <div className="sticky top-0 z-50 bg-white/90 dark:bg-[#1a1a1a]/90 backdrop-blur border-b border-black/5 dark:border-white/10">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="flex flex-col items-center">
           <div className="flex items-center gap-2">
-            <Bolt className="w-5 h-5 text-[#00C853]" />
-            <h1 className="font-bold text-lg bg-gradient-to-r from-[#FFD700] to-[#FFC400] bg-clip-text text-transparent">
-              Loto Gains AI
-            </h1>
+            <Bolt className="w-6 h-6 text-yellow-600" />
+            <div className="text-2xl font-bold text-gray-900">LOTO</div>
+          </div>
+          <div className="text-2xl font-bold bg-gradient-to-r from-yellow-500 to-amber-600 bg-clip-text text-transparent">
+            GAINS AI
           </div>
         </div>
-      </div>
+        <div className="w-24"></div> {/* Spacer for centering */}
+      </header>
 
       {/* Conteúdo */}
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+      <main className="relative z-10 max-w-6xl mx-auto px-4 py-8 space-y-8">
         {/* PASSOS */}
         <Steps step={step} />
 
         {/* TURBO */}
-        <div className="rounded-3xl border border-[#FFD700]/30 bg-gradient-to-br from-[#FFF8E1] to-[#E8F5E9] p-4 shadow relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-[#FFD700] to-[#FFC400]" />
-          <div className="flex items-center gap-2 text-[#FFC400] font-bold mb-2">
-            <Bolt className="w-5 h-5" />
-            Mode Turbo
+        <div className="rounded-3xl border-2 border-yellow-400 bg-gradient-to-r from-yellow-50 via-amber-100 to-yellow-200 p-6 shadow-xl relative overflow-hidden animate-fadeInUp hover:shadow-2xl transition-all duration-300">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 animate-pulse" />
+          
+          {/* Partículas de fundo */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute top-1/4 left-1/4 w-20 h-20 bg-yellow-400/20 rounded-full blur-2xl animate-pulse" />
+            <div className="absolute bottom-1/4 right-1/4 w-16 h-16 bg-amber-400/20 rounded-full blur-2xl animate-pulse" style={{ animationDelay: '1s' }} />
           </div>
-          <p className="text-sm text-[#121212]/80 mb-3">
-            Précision 10X supérieure, 78% de chances en plus, nouveaux numéros sans attendre.
-          </p>
-          <div className="flex gap-2 max-sm:flex-col">
-            <input
-              value={turboCode}
-              onChange={(e) => setTurboCode(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && activateTurbo()}
-              placeholder="Entrez le code d'activation"
-              maxLength={5}
-              className="flex-1 px-3 py-2 rounded-2xl border border-[#FFD700]/40 focus:outline-none focus:ring-2 focus:ring-[#FFD700]/40 bg-white dark:bg-[#1a1a1a]"
-            />
-            <button
-              onClick={activateTurbo}
-              disabled={turboActive}
-              className="px-4 py-2 rounded-2xl bg-gradient-to-r from-[#FFD700] to-[#FFC400] text-white font-semibold shadow hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60"
-            >
-              Activer
-            </button>
-          </div>
-          {turboMsg.type && (
-            <div
-              className={`mt-2 text-sm font-semibold px-3 py-2 rounded-2xl ${
-                turboMsg.type === "success"
-                  ? "bg-[#E8F5E9] text-[#009624] border border-[#00C853]/20"
-                  : "bg-red-50 text-red-600 border border-red-200"
-              }`}
-            >
-              {turboMsg.text}
+          
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-3">
+              <Bolt className="w-6 h-6 text-yellow-600 animate-pulse" />
+              <span className="text-xl font-bold bg-gradient-to-r from-yellow-600 to-amber-700 bg-clip-text text-transparent">
+                Mode Turbo {turboActive && "✓"}
+              </span>
             </div>
-          )}
+            <p className="text-gray-700 mb-4 leading-relaxed">
+              Précision 10X supérieure, 78% de chances en plus, nouveaux numéros sans attendre.
+            </p>
+            <div className="flex gap-3 max-sm:flex-col">
+              <input
+                value={turboCode}
+                onChange={(e) => setTurboCode(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && activateTurbo()}
+                placeholder="Entrez le code d'activation"
+                maxLength={5}
+                disabled={turboActive}
+                className="flex-1 px-4 py-3 rounded-xl border-2 border-yellow-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-600 bg-white transition-all disabled:opacity-60 text-center font-mono text-lg"
+              />
+              <button
+                onClick={activateTurbo}
+                disabled={turboActive}
+                className="px-6 py-3 rounded-xl bg-gradient-to-r from-yellow-400 via-yellow-500 to-amber-500 hover:from-yellow-500 hover:via-yellow-600 hover:to-amber-600 text-gray-900 font-bold shadow-lg hover:scale-105 active:scale-95 disabled:opacity-60 transition-all duration-300"
+                style={{ animation: turboActive ? 'none' : 'goldenPulse 2s ease-in-out infinite' }}
+              >
+                {turboActive ? "✓ Activé" : "Activer"}
+              </button>
+            </div>
+            {turboMsg.type && (
+              <div
+                className={`mt-3 text-sm font-semibold px-4 py-3 rounded-xl animate-fadeInUp ${
+                  turboMsg.type === "success"
+                    ? "bg-green-100 text-green-700 border-2 border-green-400"
+                    : "bg-red-100 text-red-700 border-2 border-red-400"
+                }`}
+              >
+                {turboMsg.text}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ETAPA 1 — PAÍS */}
-        <Card title="1. Choisissez votre pays">
-          <p className="text-sm text-[#FFFFFF]/70 mb-3">
-            Les pays sont filtrés pour jouer en présentiel, mais vous pouvez jouer en ligne quel que soit votre pays.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {(Object.keys(locationData) as CountryCode[]).map((code) => (
-              <button
-                key={code}
-                onClick={() => handleSelectCountry(code)}
-                className={`flex items-center gap-3 p-3 rounded-2xl border transition group ${
-                  selectedCountry === code
-                    ? "bg-[#E8F5E9] border-[#00C853]/40"
-                    : "bg-white  hover:bg-[#F1F8E9] border-[#00C853]/10"
-                }`}
-              >
-                <img
-                  src={countryFlags[code]}
-                  alt={countryNames[code]}
-                  className="w-10 h-10 rounded-lg bg-white p-1 shadow"
-                />
-                <span className="font-semibold text-left flex-1">{countryNames[code]}</span>
-                <ChevronRight className="w-4 h-4 text-[#00C853] opacity-70 group-hover:translate-x-0.5 transition" />
-              </button>
-            ))}
-          </div>
-        </Card>
-
-        {/* ETAPA 2 — CIDADE */}
-        {selectedCountry && (
-          <Card title="2. Choisissez votre ville" onBack={() => setSelectedCountry("")}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {locationData[selectedCountry as CountryCode].cities.map((city) => (
+        <div className="animate-fadeInUp">
+          <Card title="1. Choisissez votre pays">
+            <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+              Les pays sont filtrés pour jouer en présentiel, mais vous pouvez jouer en ligne quel que soit votre pays.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {(Object.keys(locationData) as CountryCode[]).map((code, index) => (
                 <button
-                  key={city}
-                  onClick={() => handleSelectCity(city)}
-                  className={`flex items-center gap-3 p-3 rounded-2xl border transition group ${
-                    selectedCity === city
-                      ? "bg-[#E8F5E9] border-[#00C853]/40"
-                      : "bg-white  hover:bg-[#F1F8E9] border-[#00C853]/10"
-                  }`}
+                  key={code}
+                  onClick={() => handleSelectCountry(code)}
+                  style={{ animationDelay: `${index * 0.05}s` }}
+                  className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all duration-300 group transform hover:scale-105 ${
+                    selectedCountry === code
+                      ? "bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-400 shadow-lg"
+                      : "bg-white hover:bg-yellow-50/50 border-yellow-200 hover:border-yellow-400 hover:shadow-md"
+                  } animate-fadeInScale`}
                 >
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#00C853] to-[#009624] text-white grid place-items-center shadow">
-                    <CityIcon className="w-5 h-5" />
-                  </div>
-                  <span className="font-semibold text-left flex-1">{city}</span>
-                  <ChevronRight className="w-4 h-4 text-[#00C853] opacity-70 group-hover:translate-x-0.5 transition" />
+                  <img
+                    src={countryFlags[code]}
+                    alt={countryNames[code]}
+                    className="w-12 h-12 rounded-lg bg-white p-1 shadow-md"
+                  />
+                  <span className="font-bold text-left flex-1 text-gray-800">{countryNames[code]}</span>
+                  <ChevronRight className="w-5 h-5 text-yellow-600 group-hover:translate-x-1 transition" />
                 </button>
               ))}
             </div>
           </Card>
+        </div>
+
+        {/* ETAPA 2 — CIDADE */}
+        {selectedCountry && (
+          <div className="animate-fadeInUp">
+            <Card title="2. Choisissez votre ville" onBack={() => setSelectedCountry("")}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {locationData[selectedCountry as CountryCode].cities.map((city, index) => (
+                  <button
+                    key={city}
+                    onClick={() => handleSelectCity(city)}
+                    style={{ animationDelay: `${index * 0.05}s` }}
+                    className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all duration-300 group transform hover:scale-105 ${
+                      selectedCity === city
+                        ? "bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-400 shadow-lg"
+                        : "bg-white hover:bg-yellow-50/50 border-yellow-200 hover:border-yellow-400 hover:shadow-md"
+                    } animate-fadeInScale`}
+                  >
+                    <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-yellow-400 to-amber-500 text-white grid place-items-center shadow-md">
+                      <CityIcon className="w-6 h-6" />
+                    </div>
+                    <span className="font-bold text-left flex-1 text-gray-800">{city}</span>
+                    <ChevronRight className="w-5 h-5 text-yellow-600 group-hover:translate-x-1 transition" />
+                  </button>
+                ))}
+              </div>
+            </Card>
+          </div>
         )}
 
         {/* ETAPA 3 — LOTERIA */}
         {selectedCity && (
-          <Card title="3. Choisissez votre loterie" onBack={() => setSelectedCity("")}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {locationData[selectedCountry as CountryCode].lotteries.map((lot) => (
-                <button
-                  key={lot.id}
-                  onClick={() => handleSelectLottery(lot.id)}
-                  className={`flex items-center gap-3 p-3 rounded-2xl border transition group ${
-                    selectedLotteryId === lot.id
-                      ? "bg-[#E8F5E9] border-[#00C853]/40"
-                      : "bg-white  hover:bg-[#F1F8E9] border-[#00C853]/10"
-                  }`}
-                >
-                  <img src={lot.logo} alt={lot.name} className="w-10 h-10 rounded-lg bg-white p-1 shadow" />
-                  <span className="font-semibold text-left flex-1">{lot.name}</span>
-                  <ChevronRight className="w-4 h-4 text-[#00C853] opacity-70 group-hover:translate-x-0.5 transition" />
-                </button>
-              ))}
-            </div>
-          </Card>
+          <div className="animate-fadeInUp">
+            <Card title="3. Choisissez votre loterie" onBack={() => setSelectedCity("")}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {locationData[selectedCountry as CountryCode].lotteries.map((lot, index) => (
+                  <button
+                    key={lot.id}
+                    onClick={() => handleSelectLottery(lot.id)}
+                    style={{ animationDelay: `${index * 0.05}s` }}
+                    className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all duration-300 group transform hover:scale-105 ${
+                      selectedLotteryId === lot.id
+                        ? "bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-400 shadow-lg"
+                        : "bg-white hover:bg-yellow-50/50 border-yellow-200 hover:border-yellow-400 hover:shadow-md"
+                    } animate-fadeInScale`}
+                  >
+                    <img src={lot.logo} alt={lot.name} className="w-12 h-12 rounded-lg bg-white p-1.5 shadow-md" />
+                    <span className="font-bold text-left flex-1 text-gray-800">{lot.name}</span>
+                    <ChevronRight className="w-5 h-5 text-yellow-600 group-hover:translate-x-1 transition" />
+                  </button>
+                ))}
+              </div>
+            </Card>
+          </div>
         )}
 
         {/* BOTÕES */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <button
             onClick={generate}
             disabled={!canGenerate || loading}
-            className="w-full px-4 py-4 rounded-3xl text-white font-extrabold uppercase tracking-wide shadow
-              bg-gradient-to-r from-[#00C853] to-[#009624]
-              hover:scale-[1.02] active:scale-[0.98] transition
-              disabled:opacity-50 disabled:cursor-not-allowed"
+            className="relative w-full px-6 py-5 rounded-xl font-bold text-xl tracking-wide shadow-xl
+              bg-gradient-to-r from-yellow-400 via-yellow-500 to-amber-500 hover:from-yellow-500 hover:via-yellow-600 hover:to-amber-600
+              text-gray-900 transform hover:scale-105 active:scale-95 transition-all duration-300
+              disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
+            style={{ animation: loading ? 'none' : 'goldenPulse 2s ease-in-out infinite' }}
           >
-            {loading ? "GÉNÉRATION..." : "GÉNÉRER MES NUMÉROS"}
+            {loading ? (
+              <span className="flex items-center justify-center gap-3">
+                <Loader2 className="w-6 h-6 animate-spin" />
+                <span>GÉNÉRATION...</span>
+              </span>
+            ) : (
+              "GÉNÉRER MES NUMÉROS"
+            )}
           </button>
 
           <button
             onClick={generate}
             disabled={!canGenerate || loading || !canGenerateMore}
-            className="w-full px-4 py-4 rounded-3xl text-white font-extrabold uppercase tracking-wide shadow
-              bg-gradient-to-r from-[#FFD700] to-[#FFC400]
-              hover:scale-[1.02] active:scale-[0.98] transition
+            className="relative w-full px-6 py-5 rounded-xl font-bold text-xl tracking-wide shadow-xl
+              bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 hover:from-amber-500 hover:via-amber-600 hover:to-orange-600
+              text-gray-900 transform hover:scale-105 active:scale-95 transition-all duration-300
               disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {canGenerateMore
-              ? "GÉNÉRER PLUS DE NUMÉROS"
+              ? "GÉNÉRER PLUS"
               : `Attendez ${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, "0")}`}
           </button>
         </div>
 
         {/* LOADER */}
         {loading && (
-          <div className="flex flex-col items-center justify-center py-6">
-            <div className="w-16 h-16 rounded-full border-4 border-[#00C853]/20 border-t-[#00C853] animate-spin" />
-            <p className="mt-3 text-[#00C853] font-bold">Génération de vos numéros porte-bonheur...</p>
+          <div className="flex flex-col items-center justify-center py-8">
+            <div className="w-20 h-20 rounded-full border-4 border-yellow-200 border-t-yellow-500 animate-spin shadow-lg" />
+            <p className="mt-4 text-yellow-700 font-bold text-lg">Génération de vos numéros porte-bonheur...</p>
           </div>
         )}
 
         {/* RESULTADOS */}
         {currentLottery && !loading && (mainNumbers.length > 0 || specialNumbers.length > 0) && (
-          <div className="rounded-3xl border border-[#00C853]/20 bg-white  p-5 shadow relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-[5px] bg-gradient-to-r from-[#FFD700] to-[#FFC400]" />
-            <div className="text-center pb-4 mb-4 border-b border-dashed border-[#00C853]/30 relative">
-              <h2 className="text-2xl font-extrabold text-[#00C853] inline-block">
+          <div className="rounded-3xl border-2 border-yellow-400 bg-white p-8 shadow-2xl relative overflow-hidden animate-fadeInUp">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 animate-pulse" />
+            
+            {/* Partículas de fundo */}
+            <div className="absolute inset-0 overflow-hidden opacity-10 pointer-events-none">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="particle-light"
+                  style={{
+                    left: `${Math.random() * 100}%`,
+                    top: `${Math.random() * 100}%`,
+                    animationDelay: `${Math.random() * 3}s`,
+                  }}
+                />
+              ))}
+            </div>
+            
+            <div className="text-center pb-6 mb-6 border-b-2 border-dashed border-yellow-300 relative">
+              <h2 className="text-4xl font-extrabold bg-gradient-to-r from-yellow-500 to-amber-600 bg-clip-text text-transparent inline-block golden-glow">
                 🎉 Vos Numéros Porte-Bonheur !
               </h2>
             </div>
 
-            <div className="text-center space-y-1 mb-4">
-              <p className="font-semibold">{formatNextDraw(currentLottery)}</p>
-              <p className="font-semibold">
+            <div className="text-center space-y-3 mb-6">
+              <p className="font-bold text-lg text-gray-700">{formatNextDraw(currentLottery)}</p>
+              <p className="font-bold text-xl">
                 Jackpot actuel :{" "}
-                <span className="bg-gradient-to-r from-[#FFD700] to-[#FFC400] bg-clip-text text-transparent font-extrabold">
+                <span className="bg-gradient-to-r from-yellow-500 to-amber-600 bg-clip-text text-transparent text-3xl font-extrabold golden-glow">
                   {lotteryPrizes[currentLottery.id] || "€0"}
                 </span>
               </p>
+              
+              {/* Barra de progresso */}
+              <div className="max-w-md mx-auto mt-4">
+                <div className="flex justify-between text-xs text-gray-600 font-semibold mb-2">
+                  <span>Dernier tirage</span>
+                  <span className="text-yellow-600 font-bold">{Math.round(getDrawProgress(currentLottery))}%</span>
+                  <span>Prochain tirage</span>
+                </div>
+                <div className="h-3 bg-yellow-100 rounded-full overflow-hidden border-2 border-yellow-300">
+                  <div 
+                    className="h-full bg-gradient-to-r from-yellow-400 via-yellow-500 to-amber-500 rounded-full transition-all duration-1000 shadow-inner"
+                    style={{ width: `${getDrawProgress(currentLottery)}%` }}
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="flex flex-wrap justify-center gap-3 my-6 relative">
               {mainNumbers.map((n, i) => (
-                <Ball key={`m-${i}`} value={n} variant="gold" delay={i * 0.08} />
+                <Ball key={`m-${i}`} value={n} variant="gold" delay={i * 0.1} />
               ))}
               {specialNumbers.map((n, i) => (
-                <Ball key={`s-${i}`} value={n} variant="green" delay={(mainNumbers.length + i) * 0.08} />
+                <Ball key={`s-${i}`} value={n} variant="green" delay={(mainNumbers.length + i) * 0.1} />
               ))}
             </div>
 
+            {/* Botão Salvar */}
+            <div className="flex justify-center mb-6">
+              <button
+                onClick={saveCombination}
+                className="inline-flex items-center gap-3 px-8 py-4 rounded-xl bg-gradient-to-r from-yellow-400 via-yellow-500 to-amber-500 hover:from-yellow-500 hover:via-yellow-600 hover:to-amber-600 text-gray-900 font-bold text-lg shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-300 group"
+                style={{ animation: 'goldenPulse 2s ease-in-out infinite' }}
+              >
+                <Save className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+                <span>SAUVEGARDER CETTE COMBINAISON</span>
+                <Volume2 className="w-5 h-5 opacity-80" />
+              </button>
+            </div>
+            
+            {/* Feedback de salvamento */}
+            {showSaveSuccess && (
+              <div className="text-center mb-6 animate-fadeInUp">
+                <div className="inline-block px-6 py-3 rounded-xl bg-gradient-to-r from-green-50 to-emerald-100 text-green-700 font-bold text-lg border-2 border-green-400 shadow-lg">
+                  ✓ Combinaison sauvegardée avec succès!
+                </div>
+              </div>
+            )}
+
             {/* Links de aposta */}
             {currentLottery.links?.length > 0 && (
-              <div className="rounded-2xl p-4 bg-[#FFF8E1] border border-[#FFD700]/30 mb-4">
-                <h3 className="text-center font-bold text-[#FFC400] mb-2">Faites vos jeux en ligne :</h3>
-                <div className="flex flex-wrap justify-center gap-2">
+              <div className="rounded-2xl p-6 bg-gradient-to-r from-yellow-50 to-amber-50 border-2 border-yellow-300 mb-6">
+                <h3 className="text-center font-bold text-lg bg-gradient-to-r from-yellow-600 to-amber-700 bg-clip-text text-transparent mb-4">
+                  Faites vos jeux en ligne :
+                </h3>
+                <div className="flex flex-wrap justify-center gap-3">
                   {currentLottery.links.map((l) => (
                     <a
                       key={l.url}
                       href={l.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-[#FFD700] to-[#FFC400] text-white font-semibold shadow hover:scale-[1.02] transition"
+                      className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-gray-900 font-bold shadow-lg transform hover:scale-105 transition-all duration-300"
                     >
                       {l.name}
-                      <ExternalLink className="w-4 h-4" />
+                      <ExternalLink className="w-5 h-5" />
                     </a>
                   ))}
                 </div>
@@ -830,35 +1084,129 @@ export default function IAPage({ onBack }: { onBack: () => void }) {
               <summary className="list-none">
                 <button
                   type="button"
-                  className="w-full inline-flex items-center justify-between px-4 py-3 rounded-2xl bg-[#E8F5E9] text-[#00C853] font-semibold border border-[#00C853]/20"
+                  className="w-full inline-flex items-center justify-between px-5 py-4 rounded-xl bg-gradient-to-r from-yellow-100 to-amber-100 hover:from-yellow-200 hover:to-amber-200 text-gray-800 font-bold border-2 border-yellow-300 transition-all duration-300"
                 >
                   <span>Adresses de points de vente</span>
-                  <ChevronDown className="w-4 h-4 transition group-open:rotate-180" />
+                  <ChevronDown className="w-5 h-5 text-yellow-600 transition-transform group-open:rotate-180" />
                 </button>
               </summary>
-              <div className="mt-2 rounded-2xl border border-[#00C853]/10 bg-[#F1F8E9]">
+              <div className="mt-3 rounded-xl border-2 border-yellow-200 bg-yellow-50/50 overflow-hidden">
                 {currentLottery.addresses.map((a, i) => (
-                  <div key={i} className="px-4 py-3 flex items-start gap-2 border-b last:border-b-0 border-[#00C853]/10">
-                    <MapPin className="w-4 h-4 text-[#00C853] mt-0.5" />
-                    <span className="text-sm">{a}</span>
+                  <div key={i} className="px-5 py-4 flex items-start gap-3 border-b last:border-b-0 border-yellow-200 hover:bg-yellow-100/50 transition-colors">
+                    <MapPin className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-700 font-medium">{a}</span>
                   </div>
                 ))}
               </div>
             </details>
           </div>
         )}
-      </div>
+
+        {/* HISTÓRICO DE COMBINAÇÕES */}
+        {savedCombinations.length > 0 && (
+          <div className="rounded-3xl border-2 border-yellow-400 bg-white p-6 shadow-2xl relative overflow-hidden animate-fadeInUp">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 animate-pulse" />
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-yellow-500 to-amber-600 bg-clip-text text-transparent flex items-center gap-2">
+                <Save className="w-6 h-6 text-yellow-600" />
+                Mes Combinaisons Sauvegardées
+              </h2>
+              <span className="px-3 py-1 rounded-full bg-gradient-to-r from-yellow-100 to-amber-100 text-yellow-700 font-bold text-sm border-2 border-yellow-300">
+                {savedCombinations.length} / 10
+              </span>
+            </div>
+
+            {/* Carrossel horizontal */}
+            <div className="relative">
+              <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-thin">
+                {savedCombinations.map((combo, index) => (
+                  <div
+                    key={combo.id}
+                    style={{ animationDelay: `${index * 0.1}s` }}
+                    className="flex-shrink-0 w-80 snap-start rounded-2xl border-2 border-yellow-300 bg-gradient-to-br from-yellow-50 to-amber-50 p-5 shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 animate-slideInRight"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="font-bold text-yellow-700 text-base">{combo.lotteryName}</h3>
+                        <p className="text-xs text-gray-600 font-medium">
+                          {new Date(combo.timestamp).toLocaleDateString("fr-FR", {
+                            day: "2-digit",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => deleteCombination(combo.id)}
+                        className="p-2 rounded-full hover:bg-red-100 text-red-500 hover:text-red-700 transition-all hover:scale-110"
+                        title="Supprimer"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    {/* Números */}
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {combo.mainNumbers.map((n, i) => (
+                        <div
+                          key={`main-${i}`}
+                          className="w-11 h-11 rounded-full bg-gradient-to-br from-yellow-400 to-amber-500 border-2 border-yellow-600 text-white font-bold text-base grid place-items-center shadow-md"
+                        >
+                          {n}
+                        </div>
+                      ))}
+                      {combo.specialNumbers.map((n, i) => (
+                        <div
+                          key={`special-${i}`}
+                          className="w-11 h-11 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 border-2 border-amber-700 text-white font-bold text-base grid place-items-center shadow-md"
+                        >
+                          {n}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Indicador de scroll */}
+            {savedCombinations.length > 1 && (
+              <div className="flex justify-center gap-2 mt-4">
+                {savedCombinations.map((_, index) => (
+                  <div
+                    key={index}
+                    className="w-2.5 h-2.5 rounded-full bg-yellow-400 shadow-sm"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </main>
 
       {/* OVERLAY DE SORTE */}
       {luckOverlay && (
-        <div className="fixed inset-0 z-[60] bg-black/80 grid place-items-center">
-          <div className="flex flex-col items-center">
-            <div className="text-6xl mb-4 animate-bounce">🍀</div>
-            <div className="text-white text-2xl font-extrabold">Chargement de votre chance...</div>
-            <Loader2 className="w-10 h-10 text-white mt-6 animate-spin" />
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm grid place-items-center">
+          <div className="flex flex-col items-center bg-gradient-to-br from-yellow-400 via-yellow-500 to-amber-500 rounded-3xl p-12 shadow-2xl border-4 border-white transform scale-in">
+            <div className="text-7xl mb-6 animate-bounce">🍀</div>
+            <div className="text-gray-900 text-3xl font-extrabold mb-4 drop-shadow-lg">Chargement de votre chance...</div>
+            <Loader2 className="w-12 h-12 text-gray-900 animate-spin drop-shadow-lg" />
           </div>
         </div>
       )}
+      
+      <style>{`
+        @keyframes scale-in {
+          0% { transform: scale(0.8) translateY(20px); opacity: 0; }
+          100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+        .scale-in {
+          animation: scale-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+      `}</style>
     </div>
   );
 }
@@ -877,18 +1225,21 @@ function Card({
   onBack?: () => void;
 }) {
   return (
-    <div className="rounded-3xl bg-white dark:bg-[#1a1a1a] border border-[#00C853]/15 shadow p-5">
-      <div className="flex items-center gap-3 mb-4">
+    <div className="rounded-3xl bg-white border-2 border-yellow-200 shadow-xl p-6 hover:shadow-2xl hover:border-yellow-400 transition-all duration-300 relative overflow-hidden">
+      {/* Borda superior decorativa */}
+      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-yellow-500 to-transparent" />
+      
+      <div className="flex items-center gap-3 mb-5 relative z-10">
         {onBack && (
           <button
             onClick={onBack}
-            className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition"
+            className="p-2 rounded-full hover:bg-yellow-100 transition-all hover:scale-110 active:scale-95"
             aria-label="Retour"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ChevronLeft className="w-6 h-6 text-yellow-600" />
           </button>
         )}
-        <h2 className="text-xl font-bold text-[#00C853]">{title}</h2>
+        <h2 className="text-2xl font-bold bg-gradient-to-r from-yellow-500 to-amber-600 bg-clip-text text-transparent">{title}</h2>
       </div>
       {children}
     </div>
@@ -899,24 +1250,29 @@ function Steps({ step }: { step: number }) {
   // 1..3 e barra preenchendo 0/50/100%
   const width = step === 1 ? "0%" : step === 2 ? "50%" : "100%";
   return (
-    <div className="relative max-w-4xl mx-auto">
-      <div className="h-1 bg-[#00C853]/15 rounded-full" />
+    <div className="relative max-w-4xl mx-auto animate-fadeInUp">
+      {/* Fundo da barra */}
+      <div className="h-2 bg-yellow-100 rounded-full border border-yellow-200" />
+      
+      {/* Barra de progresso */}
       <div
-        className="h-1 bg-gradient-to-r from-[#00C853] to-[#009624] rounded-full absolute top-0 left-0 transition-all"
+        className="h-2 bg-gradient-to-r from-yellow-400 via-yellow-500 to-amber-500 rounded-full absolute top-0 left-0 transition-all duration-500 ease-out shadow-md border border-yellow-300"
         style={{ width }}
       />
-      <div className="flex justify-between -mt-3">
+      
+      {/* Círculos dos passos */}
+      <div className="flex justify-between -mt-4">
         {[1, 2, 3].map((i) => {
           const state = i < step ? "completed" : i === step ? "active" : "idle";
           return (
             <div
               key={i}
-              className={`w-10 h-10 grid place-items-center rounded-full border-2 font-bold z-10 relative
-                ${state === "completed" ? "bg-[#00C853] text-white border-[#00C853]" : ""}
-                ${state === "active" ? "bg-[#E8F5E9] text-[#00C853] border-[#00C853]" : ""}
-                ${state === "idle" ? "bg-white dark:bg-[#1a1a1a] text-[#00C853] border-[#00C853]/40" : ""}`}
+              className={`w-14 h-14 grid place-items-center rounded-full border-4 font-bold text-lg z-10 relative transition-all duration-300 shadow-xl
+                ${state === "completed" ? "bg-gradient-to-br from-yellow-400 to-amber-500 text-white border-yellow-600 scale-110" : ""}
+                ${state === "active" ? "bg-gradient-to-br from-yellow-100 to-amber-100 text-yellow-700 border-yellow-500 scale-110 ring-4 ring-yellow-300 animate-pulse" : ""}
+                ${state === "idle" ? "bg-white text-gray-400 border-gray-300 scale-100" : ""}`}
             >
-              {i}
+              {state === "completed" ? "✓" : i}
             </div>
           );
         })}
@@ -935,36 +1291,64 @@ function Ball({
   delay?: number;
 }) {
   const base =
-    "w-14 h-14 rounded-full grid place-items-center font-extrabold text-white shadow relative";
+    "w-16 h-16 rounded-full grid place-items-center font-extrabold text-white shadow-2xl relative cursor-pointer transform transition-all duration-300 hover:scale-125";
   const theme =
     variant === "gold"
-      ? "bg-gradient-to-br from-[#FFD700] to-[#FFC400] border-4 border-[#00C853]"
-      : "bg-gradient-to-br from-[#00C853] to-[#009624] border-4 border-[#FFD700]";
+      ? "bg-gradient-to-br from-yellow-400 via-yellow-500 to-amber-500 border-4 border-yellow-600"
+      : "bg-gradient-to-br from-amber-500 via-amber-600 to-orange-500 border-4 border-amber-700";
 
-  // classe do brilho/halo sem interpolação inválida no JSX
+  // classe do brilho/halo
   const glowClass =
     variant === "gold"
-      ? "bg-gradient-to-br from-[#FFD700] to-[#FFC400]"
-      : "bg-gradient-to-br from-[#00C853] to-[#009624]";
+      ? "bg-gradient-to-br from-yellow-400 to-amber-500"
+      : "bg-gradient-to-br from-amber-500 to-orange-500";
 
   return (
     <div
-      className={`${base} ${theme}`}
+      className={`${base} ${theme} group`}
       style={{
-        animation: `popIn .5s cubic-bezier(.175,.885,.32,1.275) ${delay}s both`,
+        animation: `popIn .6s cubic-bezier(.175,.885,.32,1.275) ${delay}s both, float 3s ease-in-out ${delay + 0.6}s infinite`,
       }}
     >
       <style>{`
         @keyframes popIn {
-          0% { opacity:0; transform: scale(.5) }
-          80% { opacity:1; transform: scale(1.1) }
-          100% { opacity:1; transform: scale(1) }
+          0% { opacity:0; transform: scale(.3) rotate(-180deg) }
+          60% { opacity:1; transform: scale(1.15) rotate(10deg) }
+          80% { opacity:1; transform: scale(0.95) rotate(-5deg) }
+          100% { opacity:1; transform: scale(1) rotate(0deg) }
+        }
+        @keyframes float {
+          0%, 100% { transform: translateY(0px) }
+          50% { transform: translateY(-8px) }
+        }
+        @keyframes shine {
+          0% { left: -100%; }
+          100% { left: 200%; }
         }
       `}</style>
-      <span className="text-xl">{value}</span>
+      
+      {/* Número */}
+      <span className="text-2xl z-10 relative drop-shadow-lg">{value}</span>
+      
+      {/* Brilho animado */}
+      <div className="absolute inset-0 rounded-full overflow-hidden">
+        <div 
+          className="absolute top-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/40 to-transparent"
+          style={{
+            animation: 'shine 3s ease-in-out infinite',
+            left: '-100%'
+          }}
+        />
+      </div>
+      
+      {/* Halo ao hover */}
       <div
-        className={`absolute -inset-1 rounded-full blur-md opacity-0 hover:opacity-50 transition ${glowClass}`}
+        className={`absolute -inset-3 rounded-full blur-xl opacity-0 group-hover:opacity-70 transition-opacity duration-300 ${glowClass}`}
+        style={{ boxShadow: '0 0 40px rgba(251, 191, 36, 0.6)' }}
       />
+      
+      {/* Reflexo */}
+      <div className="absolute top-2 left-2 w-6 h-6 bg-white/50 rounded-full blur-sm" />
     </div>
   );
 }
