@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import CustomCursor from './components/CustomCursor';
 import LoginPage from './pages/LoginPage';
 import AccueilPage from './pages/AccueilPage';
@@ -17,8 +18,45 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('accueil');
   const [selectedFeature, setSelectedFeature] = useState<string | null>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // Verificar se o usuário já está logado ao carregar o app
+  useEffect(() => {
+    const checkAuth = () => {
+      const userEmail = localStorage.getItem('user_email');
+      const isLogged = localStorage.getItem('user_logged_in');
+      
+      if (userEmail && isLogged === 'true') {
+        setIsLoggedIn(true);
+      }
+      
+      setIsCheckingAuth(false);
+    };
+
+    checkAuth();
+  }, []);
 
   const handleLogin = () => setIsLoggedIn(true);
+
+  const handleLogout = () => {
+    localStorage.removeItem('user_email');
+    localStorage.removeItem('user_logged_in');
+    setIsLoggedIn(false);
+    setActiveTab('accueil');
+    setSelectedFeature(null);
+  };
+
+  // Mostrar loading enquanto verifica autenticação
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#2BC047]/10 via-white to-[#F7D25F]/10">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-[#18A238] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleFeatureClick = (feature: string) => {
     setSelectedFeature(feature);
@@ -33,6 +71,7 @@ function App() {
       <>
         <CustomCursor />
         <LoginPage onLogin={handleLogin} />
+        <Analytics />
       </>
     );
   }
@@ -43,6 +82,7 @@ function App() {
         <>
           <CustomCursor />
           <IAPage onBack={handleBackToHome} />
+          <Analytics />
         </>
       );
     }
@@ -52,6 +92,7 @@ function App() {
         <>
           <CustomCursor />
           <TurboPage onBack={handleBackToHome} />
+          <Analytics />
         </>
       );
     }
@@ -61,6 +102,7 @@ function App() {
         <>
           <CustomCursor />
           <BonusPage onBack={handleBackToHome} />
+          <Analytics />
         </>
       );
     }
@@ -70,6 +112,7 @@ function App() {
         <>
           <CustomCursor />
           <LotoGains10xPage onBack={handleBackToHome} />
+          <Analytics />
         </>
       );
     }
@@ -78,6 +121,7 @@ function App() {
       <>
         <CustomCursor />
         <VideoDetailPage featureName={selectedFeature} onBack={handleBackToHome} />
+        <Analytics />
       </>
     );
   }
@@ -89,11 +133,12 @@ function App() {
         {activeTab === 'accueil' && <AccueilPage onFeatureClick={handleFeatureClick} />}
         {activeTab === 'actualite' && <ActualitePage />}
         {activeTab === 'communaute' && <CommunautePage />}
-        {activeTab === 'profil' && <ProfilPage />}
+        {activeTab === 'profil' && <ProfilPage onLogout={handleLogout} />}
 
         <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
         <FloatingSupportButton />
       </div>
+      <Analytics />
     </>
   );
 }

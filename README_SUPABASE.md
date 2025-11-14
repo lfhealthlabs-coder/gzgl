@@ -57,12 +57,14 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   email TEXT UNIQUE NOT NULL,
   name TEXT NOT NULL,
   photo_url TEXT,
+  last_login_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Criar índices
 CREATE INDEX IF NOT EXISTS idx_user_profiles_email ON user_profiles(email);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_last_login ON user_profiles(last_login_at);
 
 -- Habilitar segurança RLS
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
@@ -136,7 +138,22 @@ USING (bucket_id = 'profile-photos');
 
 ---
 
-## ⚠️ IMPORTANTE - SE JÁ EXECUTOU O SQL ANTES
+## ⚠️ IMPORTANTE - ATUALIZAÇÃO DA TABELA
+
+Se você já tem a tabela criada, execute este SQL para adicionar a coluna de último acesso:
+
+```sql
+-- Adicionar coluna de último acesso
+ALTER TABLE user_profiles 
+ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
+-- Criar índice
+CREATE INDEX IF NOT EXISTS idx_user_profiles_last_login ON user_profiles(last_login_at);
+```
+
+---
+
+## ⚠️ ATUALIZAR POLÍTICAS (Se já executou o SQL antes)
 
 Se você já executou o SQL anteriormente e está tendo erro ao atualizar nome/foto, execute APENAS este SQL para atualizar as políticas:
 
