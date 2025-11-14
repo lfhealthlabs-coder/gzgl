@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Sparkles, Rocket, Lock } from 'lucide-react';
-import { getProfile, updateProfile } from '../services/profileService';
 
 interface LotoGains10xPageProps {
   onBack: () => void;
@@ -125,12 +124,6 @@ export default function LotoGains10xPage({ onBack }: LotoGains10xPageProps) {
       await new Promise(resolve => setTimeout(resolve, 500));
       
       setStep('selection');
-      
-      // Atualiza perfil
-      const profile = getProfile();
-      if (!profile.has10x) {
-        updateProfile({ has10x: true });
-      }
     } else {
       alert('❌ Code incorrect ! Utilisez le code du Mode Turbo.');
     }
