@@ -31,13 +31,21 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     setIsLoading(true);
 
     try {
+      console.log('Iniciando login para:', email);
+      
       // Criar/atualizar perfil no Supabase
-      await loginUser(email);
+      const profile = await loginUser(email);
+      
+      console.log('Login bem-sucedido:', profile);
       
       // Salva o email no localStorage para manter logado
       localStorage.setItem('user_email', email);
       localStorage.setItem('user_logged_in', 'true');
       
+      // Pequeno delay para garantir que tudo foi salvo
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      console.log('Redirecionando para aplicação...');
       onLogin();
     } catch (error) {
       console.error('Erro no login:', error);
