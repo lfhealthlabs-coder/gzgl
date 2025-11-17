@@ -1,6 +1,8 @@
-// Serviço de gerenciamento de notificações
+// Serviço de gerenciamento de notificações (integração com Supabase)
 
-export type NotificationType = 'jackpot' | 'info' | 'warning' | 'success';
+import { supabase } from '../lib/supabase';
+
+export type NotificationType = 'comment' | 'reaction' | 'jackpot' | 'info' | 'warning' | 'success' | 'moderation_approved' | 'moderation_rejected';
 
 export interface Notification {
   id: string;
@@ -11,159 +13,247 @@ export interface Notification {
   read: boolean;
   lotteryName?: string;
   jackpotAmount?: string;
+  feedItemId?: string;
+  commentId?: string;
+  reactionType?: 'like';
+  actorName?: string;
+  actorEmail?: string;
+  rejectionReason?: string;
 }
 
 const NOTIFICATIONS_KEY = 'app_notifications';
 
 /**
- * Gera notificações mockadas de jackpots sorteados
+ * Busca notificações do banco de dados
  */
-function generateMockNotifications(): Notification[] {
-  const now = new Date();
-  
-  return [
-    {
-      id: '1',
-      type: 'jackpot',
-      title: '🎰 Jackpot Mega Sena Tiré !',
-      message: 'Le tirage de Mega Sena a été effectué ! Vérifiez vos numéros maintenant.',
-      timestamp: new Date(now.getTime() - 5 * 60000), // 5 minutos atrás
-      read: false,
-      lotteryName: 'Mega Sena',
-      jackpotAmount: '45.000.000 €'
-    },
-    {
-      id: '2',
-      type: 'jackpot',
-      title: '🎰 Nouveau Résultat - Quina',
-      message: 'Le tirage de Quina vient d\'avoir lieu ! Vérifiez si vous êtes le chanceux.',
-      timestamp: new Date(now.getTime() - 2 * 60 * 60000), // 2 horas atrás
-      read: false,
-      lotteryName: 'Quina',
-      jackpotAmount: '8.500.000 €'
-    },
-    {
-      id: '3',
-      type: 'info',
-      title: '📢 Bienvenue sur LOTTO APP',
-      message: 'Configurez vos notifications pour recevoir des alertes de tirages en temps réel.',
-      timestamp: new Date(now.getTime() - 24 * 60 * 60000), // 1 dia atrás
-      read: true
-    },
-    {
-      id: '4',
-      type: 'jackpot',
-      title: '🎰 Lotofácil - Résultat Disponible',
-      message: 'Le résultat de Lotofácil est disponible. Vérifiez vos billets !',
-      timestamp: new Date(now.getTime() - 5 * 60 * 60000), // 5 horas atrás
-      read: false,
-      lotteryName: 'Lotofácil',
-      jackpotAmount: '1.200.000 €'
-    }
-  ];
-}
+export async function getNotifications(): Promise<Notification[]> {
+  try {
+    const userEmail = localStorage.getItem('user_email');
+    if (!userEmail) return [];
 
-/**
- * Retorna todas as notificações
- */
-export function getNotifications(): Notification[] {
-  const stored = localStorage.getItem(NOTIFICATIONS_KEY);
-  
-  if (stored) {
-    try {
-      const parsed = JSON.parse(stored);
-      
-      // Verifica se há notificações em português (versão antiga)
-      const hasPortugueseNotifications = parsed.some((n: any) => 
-        n.message?.includes('Verifique seus números') || 
-        n.title?.includes('Sorteado') ||
-        n.message?.includes('foi o sortudo')
-      );
-      
-      // Se encontrar notificações antigas em português, regenera em francês
-      if (hasPortugueseNotifications) {
-        const mockNotifications = generateMockNotifications();
-        saveNotifications(mockNotifications);
-        return mockNotifications;
+    // Buscar notificações do feed (comentários e reações)
+    const { data: feedNotifications, error: feedError } = await supabase
+      .from('feed_notifications')
+      .select('*')
+      .eq('user_email', userEmail)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (feedError) {
+      console.error('Erro ao buscar notificações do feed:', feedError);
+    }
+
+    // Converter notificações do feed para o formato esperado
+    const convertedNotifications: Notification[] = (feedNotifications || []).map((n: any) => {
+      let title = '';
+      let message = '';
+
+      if (n.notification_type === 'comment') {
+        title = '💬 Nouveau commentaire';
+        message = `${n.actor_name} a commenté votre publication`;
+      } else if (n.notification_type === 'reaction') {
+        const reactionEmoji = '❤️';
+        title = `${reactionEmoji} Nouvelle réaction`;
+        message = `${n.actor_name} a réagi à votre publication`;
+      } else if (n.notification_type === 'moderation_approved') {
+        title = '✅ Publication approuvée';
+        message = 'Votre publication a été approuvée et est maintenant visible dans le fil d\'actualité';
+      } else if (n.notification_type === 'moderation_rejected') {
+        title = '❌ Publication rejetée';
+        // Se houver motivo, incluir na mensagem
+        const defaultMessage = 'Votre publication a été rejetée par la modération';
+        message = n.rejection_reason 
+          ? `Votre publication a été rejetée par la modération. Raison : ${n.rejection_reason}`
+          : defaultMessage;
       }
-      
-      // Converte strings de data de volta para objetos Date
-      return parsed.map((n: any) => ({
-        ...n,
-        timestamp: new Date(n.timestamp)
-      }));
-    } catch {
-      // Se houver erro ao parsear, regenera
-      const mockNotifications = generateMockNotifications();
-      saveNotifications(mockNotifications);
-      return mockNotifications;
-    }
-  }
-  
-  // Se não houver notificações salvas, cria as mockadas
-  const mockNotifications = generateMockNotifications();
-  saveNotifications(mockNotifications);
-  return mockNotifications;
-}
 
-/**
- * Salva notificações no localStorage
- */
-function saveNotifications(notifications: Notification[]): void {
-  localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications));
+      return {
+        id: n.id,
+        type: n.notification_type as NotificationType,
+        title,
+        message,
+        timestamp: new Date(n.created_at),
+        read: n.is_read || false,
+        feedItemId: n.feed_item_id,
+        commentId: n.comment_id,
+        reactionType: n.reaction_type,
+        actorName: n.actor_name,
+        actorEmail: n.actor_email,
+        rejectionReason: n.rejection_reason,
+      };
+    });
+
+    // Buscar notificações mockadas antigas do localStorage (jackpots, etc)
+    const stored = localStorage.getItem(NOTIFICATIONS_KEY);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        const mockNotifications: Notification[] = parsed
+          .filter((n: any) => n.type === 'jackpot' || n.type === 'info' || n.type === 'warning' || n.type === 'success')
+          .map((n: any) => ({
+            ...n,
+            timestamp: new Date(n.timestamp),
+          }));
+
+        return [...convertedNotifications, ...mockNotifications].sort(
+          (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
+        );
+      } catch {
+        // Ignorar erro de parsing
+      }
+    }
+
+    return convertedNotifications;
+  } catch (error) {
+    console.error('Erro ao buscar notificações:', error);
+    return [];
+  }
 }
 
 /**
  * Marca uma notificação como lida
  */
-export function markAsRead(notificationId: string): void {
-  const notifications = getNotifications();
-  const updated = notifications.map(n => 
-    n.id === notificationId ? { ...n, read: true } : n
-  );
-  saveNotifications(updated);
+export async function markAsRead(notificationId: string): Promise<void> {
+  try {
+    const userEmail = localStorage.getItem('user_email');
+    if (!userEmail) return;
+
+    // Atualizar no banco se for notificação do feed
+    const { error } = await supabase
+      .from('feed_notifications')
+      .update({ is_read: true })
+      .eq('id', notificationId)
+      .eq('user_email', userEmail);
+
+    if (error) {
+      console.error('Erro ao marcar notificação como lida:', error);
+    }
+
+    // Atualizar no localStorage se for notificação mockada
+    const stored = localStorage.getItem(NOTIFICATIONS_KEY);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        const updated = parsed.map((n: any) =>
+          n.id === notificationId ? { ...n, read: true } : n
+        );
+        localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated));
+      } catch {
+        // Ignorar erro
+      }
+    }
+  } catch (error) {
+    console.error('Erro ao marcar notificação como lida:', error);
+  }
 }
 
 /**
  * Marca todas as notificações como lidas
  */
-export function markAllAsRead(): void {
-  const notifications = getNotifications();
-  const updated = notifications.map(n => ({ ...n, read: true }));
-  saveNotifications(updated);
+export async function markAllAsRead(): Promise<void> {
+  try {
+    const userEmail = localStorage.getItem('user_email');
+    if (!userEmail) return;
+
+    // Atualizar todas no banco
+    const { error } = await supabase
+      .from('feed_notifications')
+      .update({ is_read: true })
+      .eq('user_email', userEmail)
+      .eq('is_read', false);
+
+    if (error) {
+      console.error('Erro ao marcar todas as notificações como lidas:', error);
+    }
+
+    // Atualizar no localStorage
+    const stored = localStorage.getItem(NOTIFICATIONS_KEY);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        const updated = parsed.map((n: any) => ({ ...n, read: true }));
+        localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated));
+      } catch {
+        // Ignorar erro
+      }
+    }
+  } catch (error) {
+    console.error('Erro ao marcar todas as notificações como lidas:', error);
+  }
 }
 
 /**
  * Retorna o número de notificações não lidas
  */
-export function getUnreadCount(): number {
-  const notifications = getNotifications();
-  return notifications.filter(n => !n.read).length;
-}
+export async function getUnreadCount(): Promise<number> {
+  try {
+    const userEmail = localStorage.getItem('user_email');
+    if (!userEmail) return 0;
 
-/**
- * Adiciona uma nova notificação (para uso futuro)
- */
-export function addNotification(notification: Omit<Notification, 'id' | 'timestamp' | 'read'>): void {
-  const notifications = getNotifications();
-  const newNotification: Notification = {
-    ...notification,
-    id: Date.now().toString(),
-    timestamp: new Date(),
-    read: false
-  };
-  
-  notifications.unshift(newNotification); // Adiciona no início
-  saveNotifications(notifications);
+    // Contar notificações não lidas do feed
+    const { count, error } = await supabase
+      .from('feed_notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_email', userEmail)
+      .eq('is_read', false);
+
+    if (error) {
+      console.error('Erro ao contar notificações não lidas:', error);
+      return 0;
+    }
+
+    // Contar notificações mockadas não lidas
+    const stored = localStorage.getItem(NOTIFICATIONS_KEY);
+    let mockUnreadCount = 0;
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        mockUnreadCount = parsed.filter((n: any) => !n.read).length;
+      } catch {
+        // Ignorar erro
+      }
+    }
+
+    return (count || 0) + mockUnreadCount;
+  } catch (error) {
+    console.error('Erro ao contar notificações não lidas:', error);
+    return 0;
+  }
 }
 
 /**
  * Remove uma notificação
  */
-export function deleteNotification(notificationId: string): void {
-  const notifications = getNotifications();
-  const updated = notifications.filter(n => n.id !== notificationId);
-  saveNotifications(updated);
+export async function deleteNotification(notificationId: string): Promise<void> {
+  try {
+    const userEmail = localStorage.getItem('user_email');
+    if (!userEmail) return;
+
+    // Deletar do banco se for notificação do feed
+    const { error } = await supabase
+      .from('feed_notifications')
+      .delete()
+      .eq('id', notificationId)
+      .eq('user_email', userEmail);
+
+    if (error) {
+      console.error('Erro ao deletar notificação:', error);
+    }
+
+    // Deletar do localStorage se for notificação mockada
+    const stored = localStorage.getItem(NOTIFICATIONS_KEY);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        const updated = parsed.filter((n: any) => n.id !== notificationId);
+        localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated));
+      } catch {
+        // Ignorar erro
+      }
+    }
+  } catch (error) {
+    console.error('Erro ao deletar notificação:', error);
+  }
 }
 
 /**
@@ -175,13 +265,12 @@ export function getRelativeTime(date: Date): string {
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
-  
+
   if (diffMins < 1) return 'À l\'instant';
   if (diffMins < 60) return `Il y a ${diffMins} min`;
   if (diffHours < 24) return `Il y a ${diffHours}h`;
   if (diffDays === 1) return 'Hier';
   if (diffDays < 7) return `Il y a ${diffDays} jours`;
-  
+
   return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
 }
-

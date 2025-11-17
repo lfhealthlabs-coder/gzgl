@@ -13,12 +13,22 @@ import IAPage from './pages/AI';
 import TurboPage from './pages/TurboPage';
 import BonusPage from './pages/BonusPage';
 import LotoGains10xPage from './pages/LotoGains10xPage';
+import AdminPage from './pages/AdminPage';
+import AdminDashboardPage from './pages/AdminDashboardPage';
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('accueil');
   const [selectedFeature, setSelectedFeature] = useState<string | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [showAdmin, setShowAdmin] = useState(false);
+
+  // Verificar se está na rota /admin
+  useEffect(() => {
+    if (window.location.pathname === '/admin') {
+      setShowAdmin(true);
+    }
+  }, []);
 
   // Verificar se o usuário já está logado ao carregar o app
   useEffect(() => {
@@ -71,6 +81,20 @@ function App() {
       <>
         <CustomCursor />
         <LoginPage onLogin={handleLogin} />
+        <Analytics />
+      </>
+    );
+  }
+
+  // Mostrar página admin se estiver na rota /admin
+  if (showAdmin) {
+    return (
+      <>
+        <CustomCursor />
+        <AdminPage onBack={() => {
+          setShowAdmin(false);
+          window.history.pushState({}, '', '/');
+        }} />
         <Analytics />
       </>
     );
@@ -134,6 +158,7 @@ function App() {
         {activeTab === 'actualite' && <ActualitePage />}
         {activeTab === 'communaute' && <CommunautePage />}
         {activeTab === 'profil' && <ProfilPage onLogout={handleLogout} />}
+        {activeTab === 'admin' && <AdminDashboardPage />}
 
         <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
         <FloatingSupportButton />
