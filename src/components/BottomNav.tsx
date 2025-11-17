@@ -1,6 +1,8 @@
-import { Home, Newspaper, Users, User } from 'lucide-react';
+import { Home, Newspaper, Users, User, Shield } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { isModerator } from '../services/feedService';
 
-export type TabType = 'accueil' | 'actualite' | 'communaute' | 'profil';
+export type TabType = 'accueil' | 'actualite' | 'communaute' | 'profil' | 'admin';
 
 interface BottomNavProps {
   activeTab: TabType;
@@ -8,6 +10,16 @@ interface BottomNavProps {
 }
 
 export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
+  const [isUserModerator, setIsUserModerator] = useState(false);
+
+  useEffect(() => {
+    const checkModerator = async () => {
+      const isMod = await isModerator();
+      setIsUserModerator(isMod);
+    };
+    checkModerator();
+  }, []);
+
   const tabs = [
     { id: 'accueil' as TabType, label: 'Accueil', icon: Home },
     { id: 'actualite' as TabType, label: "Fil d'actualité", icon: Newspaper },
@@ -15,20 +27,32 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     { id: 'profil' as TabType, label: 'Profil', icon: User },
   ];
 
+  // Adicionar aba de admin apenas para moderadores
+  if (isUserModerator) {
+    tabs.push({ id: 'admin' as TabType, label: 'Admin', icon: Shield });
+  }
+
+  const gridCols = tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4';
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl z-50">
       <div className="max-w-screen-xl mx-auto px-4">
-        <div className="grid grid-cols-4 gap-2">
+        <div className={`grid ${gridCols} gap-2`}>
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
+            const isAdminTab = tab.id === 'admin';
 
             return (
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
                 className={`interactive flex flex-col items-center justify-center py-3 px-2 transition-all duration-300 ${
-                  isActive ? 'text-[#18A238] scale-105' : 'text-gray-500 hover:text-[#2BC047]'
+                  isActive 
+                    ? isAdminTab 
+                      ? 'text-purple-600 scale-105' 
+                      : 'text-[#18A238] scale-105'
+                    : 'text-gray-500 hover:text-[#2BC047]'
                 }`}
               >
                 <Icon

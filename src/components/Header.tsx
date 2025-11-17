@@ -9,28 +9,29 @@ export default function Header() {
 
   useEffect(() => {
     // Atualizar contador de notificações não lidas
-    const updateUnreadCount = () => {
-      setUnreadCount(getUnreadCount());
+    const updateUnreadCount = async () => {
+      const count = await getUnreadCount();
+      setUnreadCount(count);
     };
 
     updateUnreadCount();
     
-    // Atualizar a cada 30 segundos
-    const interval = setInterval(updateUnreadCount, 30000);
+    // Atualizar a cada 5 segundos para notificações em tempo real
+    const interval = setInterval(updateUnreadCount, 5000);
     
     return () => clearInterval(interval);
   }, []);
 
-  const handleOpenNotifications = () => {
+  const handleOpenNotifications = async () => {
     setIsNotificationsOpen(true);
     // Atualizar contador quando abrir
-    setUnreadCount(getUnreadCount());
+    const count = await getUnreadCount();
+    setUnreadCount(count);
   };
 
-  const handleCloseNotifications = () => {
+  const handleCloseNotifications = async () => {
     setIsNotificationsOpen(false);
-    // Atualizar contador quando fechar
-    setUnreadCount(getUnreadCount());
+    // Atualizar contador quando fechar (já será atualizado pelo intervalo)
   };
 
   return (

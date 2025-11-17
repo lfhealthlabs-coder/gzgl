@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Trophy, Clock, TrendingUp, Newspaper, ExternalLink, Sparkles, Moon, Sun } from 'lucide-react';
+import { fetchJackpots, fetchLotteries, generateJackpots, Jackpot as JackpotType, Lottery } from '../services/jackpotService';
 
 interface BonusPageProps {
   onBack: () => void;
@@ -54,8 +55,9 @@ interface Ticket {
 
 type FilterType = 'tous' | 'haut-potentiel' | 'europeen' | 'national' | 'international';
 
-// Mock de loterias disponíveis
-const lotteries: { [key: string]: { 
+// Loterias serão carregadas do banco de dados
+// Mantido apenas para compatibilidade com código existente
+let lotteriesMap: { [key: string]: { 
   name: string; 
   url: string; 
   region: 'europe' | 'france' | 'international'; 
@@ -63,56 +65,7 @@ const lotteries: { [key: string]: {
   probabilite: string;
   hasAPI: boolean;
   apiUrl?: string;
-} } = {
-  // França (expandido) - FDJ possui APIs limitadas
-  'loto-fr': { name: 'Loto', url: 'https://www.fdj.fr/jeux/jeux-de-tirage/loto', region: 'france', pays: 'France', probabilite: '1 sur 19 068 840', hasAPI: true, apiUrl: 'https://www.fdj.fr/api/loto' },
-  'euromillions-fr': { name: 'EuroMillions My Million', url: 'https://www.fdj.fr/jeux/jeux-de-tirage/euromillions', region: 'france', pays: 'France', probabilite: '1 sur 139 838 160', hasAPI: true, apiUrl: 'https://www.fdj.fr/api/euromillions' },
-  'keno-fr': { name: 'Keno', url: 'https://www.fdj.fr/jeux/jeux-de-tirage/keno', region: 'france', pays: 'France', probabilite: '1 sur 2 147 181', hasAPI: true, apiUrl: 'https://www.fdj.fr/api/keno' },
-  'loto-super-cagnotte': { name: 'Loto Super Cagnotte', url: 'https://www.fdj.fr', region: 'france', pays: 'France', probabilite: '1 sur 19 068 840', hasAPI: false },
-  'eurodreams-fr': { name: 'EuroDreams', url: 'https://www.fdj.fr/jeux/jeux-de-tirage/eurodreams', region: 'france', pays: 'France', probabilite: '1 sur 19 191 900', hasAPI: false },
-  'amigo-fr': { name: 'Amigo', url: 'https://www.fdj.fr', region: 'france', pays: 'France', probabilite: '1 sur 1 906 884', hasAPI: false },
-  'cash-fr': { name: 'Cash', url: 'https://www.fdj.fr', region: 'france', pays: 'France', probabilite: '1 sur 324 632', hasAPI: false },
-  'loto-week-end': { name: 'Loto Week-end', url: 'https://www.fdj.fr', region: 'france', pays: 'France', probabilite: '1 sur 19 068 840', hasAPI: false },
-  'quinté-plus': { name: 'Quinté+', url: 'https://www.pmu.fr', region: 'france', pays: 'France', probabilite: '1 sur 7 893 600', hasAPI: false },
-  'joker-plus': { name: 'Joker+', url: 'https://www.fdj.fr', region: 'france', pays: 'France', probabilite: '1 sur 1 000 000', hasAPI: false },
-  
-  // Europa (expandido) - Poucas APIs públicas disponíveis
-  'euromillions': { name: 'EuroMillions', url: 'https://www.euro-millions.com', region: 'europe', pays: 'Europe', probabilite: '1 sur 139 838 160', hasAPI: true, apiUrl: 'https://www.euro-millions.com/api/results' },
-  'eurojackpot': { name: 'Eurojackpot', url: 'https://www.eurojackpot.org', region: 'europe', pays: 'Europe', probabilite: '1 sur 139 838 160', hasAPI: true, apiUrl: 'https://www.eurojackpot.org/api/results' },
-  'superenalotto': { name: 'SuperEnalotto', url: 'https://www.superenalotto.it', region: 'europe', pays: 'Italie', probabilite: '1 sur 622 614 630', hasAPI: false },
-  'el-gordo': { name: 'El Gordo', url: 'https://www.loteriaelgordo.es', region: 'europe', pays: 'Espagne', probabilite: '1 sur 31 625 100', hasAPI: false },
-  'lotto-uk': { name: 'UK National Lottery', url: 'https://www.national-lottery.co.uk', region: 'europe', pays: 'Royaume-Uni', probabilite: '1 sur 45 057 474', hasAPI: true, apiUrl: 'https://www.national-lottery.co.uk/api/results' },
-  'thunderball-uk': { name: 'UK Thunderball', url: 'https://www.national-lottery.co.uk', region: 'europe', pays: 'Royaume-Uni', probabilite: '1 sur 8 060 598', hasAPI: true, apiUrl: 'https://www.national-lottery.co.uk/api/thunderball' },
-  'eurodreams-eu': { name: 'EuroDreams', url: 'https://www.euro-millions.com', region: 'europe', pays: 'Europe', probabilite: '1 sur 19 191 900', hasAPI: false },
-  'lotto-allemagne': { name: 'Lotto 6aus49', url: 'https://www.lotto.de', region: 'europe', pays: 'Allemagne', probabilite: '1 sur 139 838 160', hasAPI: false },
-  'lotto-austria': { name: 'Lotto Autriche', url: 'https://www.lotterien.at', region: 'europe', pays: 'Autriche', probabilite: '1 sur 8 145 060', hasAPI: false },
-  'viking-lotto': { name: 'Viking Lotto', url: 'https://www.vikinglotto.com', region: 'europe', pays: 'Scandinavie', probabilite: '1 sur 98 172 096', hasAPI: false },
-  'irish-lotto': { name: 'Irish Lotto', url: 'https://www.lottery.ie', region: 'europe', pays: 'Irlande', probabilite: '1 sur 10 737 573', hasAPI: true, apiUrl: 'https://www.lottery.ie/api/results' },
-  'swiss-lotto': { name: 'Swiss Lotto', url: 'https://www.swisslos.ch', region: 'europe', pays: 'Suisse', probabilite: '1 sur 31 474 716', hasAPI: false },
-  'polish-lotto': { name: 'Lotto Pologne', url: 'https://www.lotto.pl', region: 'europe', pays: 'Pologne', probabilite: '1 sur 13 983 816', hasAPI: false },
-  'dutch-lotto': { name: 'Lotto Pays-Bas', url: 'https://www.lotto.nl', region: 'europe', pays: 'Pays-Bas', probabilite: '1 sur 8 145 060', hasAPI: false },
-  'greek-lotto': { name: 'Greek Lotto', url: 'https://www.opap.gr', region: 'europe', pays: 'Grèce', probabilite: '1 sur 24 435 180', hasAPI: false },
-  'belgian-lotto': { name: 'Lotto Belgique', url: 'https://www.loterie-nationale.be', region: 'europe', pays: 'Belgique', probabilite: '1 sur 13 983 816', hasAPI: false },
-  'set-for-life-uk': { name: 'Set For Life', url: 'https://www.national-lottery.co.uk', region: 'europe', pays: 'Royaume-Uni', probabilite: '1 sur 15 339 390', hasAPI: true, apiUrl: 'https://www.national-lottery.co.uk/api/setforlife' },
-  'la-primitiva': { name: 'La Primitiva', url: 'https://www.loteriasyapuestas.es', region: 'europe', pays: 'Espagne', probabilite: '1 sur 13 983 816', hasAPI: false },
-  'bonoloto': { name: 'Bonoloto', url: 'https://www.loteriasyapuestas.es', region: 'europe', pays: 'Espagne', probabilite: '1 sur 13 983 816', hasAPI: false },
-  'lotto-portugal': { name: 'Totoloto', url: 'https://www.jogossantacasa.pt', region: 'europe', pays: 'Portugal', probabilite: '1 sur 13 983 816', hasAPI: false },
-  'swedish-lotto': { name: 'Swedish Lotto', url: 'https://www.svenskaspel.se', region: 'europe', pays: 'Suède', probabilite: '1 sur 6 724 520', hasAPI: false },
-  'norway-lotto': { name: 'Norway Lotto', url: 'https://www.norsk-tipping.no', region: 'europe', pays: 'Norvège', probabilite: '1 sur 5 379 616', hasAPI: false },
-  'denmark-lotto': { name: 'Denmark Lotto', url: 'https://www.danskespil.dk', region: 'europe', pays: 'Danemark', probabilite: '1 sur 8 347 680', hasAPI: false },
-  'finnish-lotto': { name: 'Veikkaus Lotto', url: 'https://www.veikkaus.fi', region: 'europe', pays: 'Finlande', probabilite: '1 sur 15 380 937', hasAPI: false },
-  'czech-lotto': { name: 'Sportka', url: 'https://www.sazka.cz', region: 'europe', pays: 'République Tchèque', probabilite: '1 sur 13 983 816', hasAPI: false },
-  'hungarian-lotto': { name: 'Hatoslottó', url: 'https://www.szerencsejatek.hu', region: 'europe', pays: 'Hongrie', probabilite: '1 sur 13 983 816', hasAPI: false },
-  'croatian-lotto': { name: 'Lotto Croatia', url: 'https://www.lutrija.hr', region: 'europe', pays: 'Croatie', probabilite: '1 sur 13 983 816', hasAPI: false },
-  
-  // Internacional - APIs disponíveis para principais
-  'powerball': { name: 'Powerball', url: 'https://www.powerball.com', region: 'international', pays: 'USA', probabilite: '1 sur 292 201 338', hasAPI: true, apiUrl: 'https://www.powerball.com/api/results' },
-  'mega-millions': { name: 'Mega Millions', url: 'https://www.megamillions.com', region: 'international', pays: 'USA', probabilite: '1 sur 302 575 350', hasAPI: true, apiUrl: 'https://www.megamillions.com/api/results' },
-  'mega-sena': { name: 'Mega-Sena', url: 'https://loterias.caixa.gov.br', region: 'international', pays: 'Brésil', probabilite: '1 sur 50 063 860', hasAPI: true, apiUrl: 'https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena' },
-  'oz-lotto': { name: 'Oz Lotto', url: 'https://www.ozlotteries.com', region: 'international', pays: 'Australie', probabilite: '1 sur 45 379 620', hasAPI: false },
-  'lotto-max': { name: 'Lotto Max', url: 'https://www.lotto649.com', region: 'international', pays: 'Canada', probabilite: '1 sur 33 294 800', hasAPI: false },
-  'lotto-649': { name: 'Lotto 6/49', url: 'https://www.lotto649.com', region: 'international', pays: 'Canada', probabilite: '1 sur 13 983 816', hasAPI: false },
-};
+} } = {};
 
 type LotoGainsTabType = 'resultats' | 'mes-billets';
 
@@ -137,129 +90,30 @@ export default function BonusPage({ onBack }: BonusPageProps) {
   const [ticketNote, setTicketNote] = useState('');
   const [selectedTickets, setSelectedTickets] = useState<string[]>([]);
 
-  // Gerar jackpots mockados (incluindo últimas 2 semanas para os com API)
-  const getTodayJackpots = (): Jackpot[] => {
-    const lotteryIds = Object.keys(lotteries);
-    const mockJackpots: Jackpot[] = [];
-    
-    const notesExamples = [
-      'Jackpot record à gagner - Le plus gros jackpot européen de la saison',
-      'Super Cagnotte ce weekend - Ne manquez pas cette chance exceptionnelle',
-      'Jackpot en progression constante depuis 3 semaines consécutives',
-      'Tirage exceptionnel - Double chance de gagner avec bonus inclus',
-      'Record national - Plus gros jackpot de l\'année en cours',
-      'Promotion spéciale pour les nouveaux joueurs ce mois-ci',
-      'Jackpot garanti minimum - Jamais en dessous du montant annoncé',
-      'Tirage spécial avec gains supplémentaires et bonus multiplicateur',
-      'Opportunité unique - Jackpot multiplié par 2 pour ce tirage',
-      'Dernière chance avant réinitialisation du jackpot la semaine prochaine',
-      'Gains multiples possibles avec les codes gagnants additionnels',
-      'Jackpot accumulé sur plusieurs semaines - Montant exceptionnel',
-      'Tirage anniversaire avec primes et cadeaux bonus',
-      'Jackpot historique - Montant jamais atteint auparavant',
-      'Super tirage de fin d\'année avec jackpots garantis',
-      'Cagnotte exceptionnelle suite à plusieurs tirages sans gagnant',
-      'Prix record en jeu - Plus gros gain possible cette année',
-      'Tirage spécial du mois avec bonus de participation',
-      'Jackpot boosté grâce aux multiples reports successifs',
-      'Gain maximum garanti avec multiplicateur de cagnotte actif',
-      'Tirage événement avec récompenses supplémentaires',
-      'Jackpot triple suite à l\'accumulation des dernières semaines',
-      'Promotion limitée - Bonus de bienvenue pour nouveaux participants',
-      'Cagnotte millionnaire en jeu pour ce tirage exceptionnel',
-      'Prix incroyable avec possibilité de gains secondaires',
-      'Tirage bonus avec plusieurs millions en jeu',
-      'Record de participation attendu - Jackpot historique',
-      'Gain garanti avec minimum de 2 millions d\'euros',
-      'Super chance de devenir millionnaire dès ce tirage',
-      'Jackpot exceptionnel rarement atteint dans cette loterie',
-      'Montant record suite aux reports des tirages précédents',
-      'Tirage spécial automne avec jackpots boostés',
-      'Cagnotte géante - Plus gros gain de la décennie',
-      'Opportunité rare avec jackpot multiplié et bonus actifs',
-      'Prix maximal en jeu - Derniers jours pour participer',
-      'Jackpot augmenté de 50% pour ce tirage unique',
-      'Gain exceptionnel avec bonus de participation garantis',
-      'Tirage historique - Ne ratez pas cette chance unique',
-      'Cagnotte record attendue pour le prochain tirage',
-      'Super jackpot avec gains complémentaires assurés',
-    ];
-    
-    // Data base: 12 de novembro de 2025 (atualidade)
-    const hoje = new Date(2025, 10, 12); // Mês 10 = novembro (0-indexed)
-    
-    // Criar jackpots para cada loteria
-    lotteryIds.forEach((lotteryId, index) => {
-      const lottery = lotteries[lotteryId];
-      
-      // Definir valores base por região
-      let baseValue;
-      if (lottery.region === 'france') {
-        baseValue = Math.random() * 30000000 + 2000000; // 2M a 32M
-      } else if (lottery.region === 'europe') {
-        baseValue = Math.random() * 150000000 + 10000000; // 10M a 160M
-      } else {
-        baseValue = Math.random() * 300000000 + 50000000; // 50M a 350M
-      }
-      
-      // Se tem API, adicionar sorteios das últimas 2 semanas (passados)
-      if (lottery.hasAPI) {
-        // Adicionar 3 sorteios passados (últimas 2 semanas)
-        for (let pastDays = 14; pastDays >= 7; pastDays -= 7) {
-          const dateTiragePassada = new Date(hoje);
-          dateTiragePassada.setDate(dateTiragePassada.getDate() - pastDays);
-          
-          const dateLimitePassada = new Date(dateTiragePassada);
-          dateLimitePassada.setHours(dateLimitePassada.getHours() - 2);
-          
-          mockJackpots.push({
-            id: `jackpot_${index}_past_${pastDays}`,
-            pays: lottery.pays,
-            loterie: lottery.name,
-            valeur: Math.round(baseValue * (0.8 + Math.random() * 0.4)), // Variação de valor
-            tirage: ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'][dateTiragePassada.getDay()],
-            date_limite: dateLimitePassada.toLocaleDateString('fr-FR'),
-            date_tirage: dateTiragePassada.toLocaleDateString('fr-FR'),
-            probabilite: lottery.probabilite,
-            notes: `Tirage du ${dateTiragePassada.toLocaleDateString('fr-FR')} - Résultats disponibles`,
-            lotteryId,
-            region: lottery.region
-          });
-        }
-      }
-      
-      // Sortear data futura (1 a 30 dias no futuro)
-      const dayOffset = Math.floor(Math.random() * 30) + 1;
-      const dateTirage = new Date(hoje);
-      dateTirage.setDate(dateTirage.getDate() + dayOffset);
-      
-      const dateLimite = new Date(dateTirage);
-      dateLimite.setHours(dateLimite.getHours() - 2); // 2h antes do sorteio
-      
-      mockJackpots.push({
-        id: `jackpot_${index}`,
-        pays: lottery.pays,
-        loterie: lottery.name,
-        valeur: Math.round(baseValue),
-        tirage: ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'][dateTirage.getDay()],
-        date_limite: dateLimite.toLocaleDateString('fr-FR'),
-        date_tirage: dateTirage.toLocaleDateString('fr-FR'),
-        probabilite: lottery.probabilite,
-        notes: notesExamples[index % notesExamples.length],
-        lotteryId,
-        region: lottery.region
-      });
-    });
-    
-    // Ordenar por valor decrescente
-    return mockJackpots.sort((a, b) => b.valeur - a.valeur);
+  // Converter JackpotType para formato local
+  const convertJackpot = (jackpot: JackpotType): Jackpot => {
+    return {
+      id: jackpot.id,
+      pays: jackpot.lottery?.pays || '',
+      loterie: jackpot.lottery?.name || '',
+      valeur: jackpot.valeur,
+      tirage: jackpot.tirage,
+      date_limite: jackpot.date_limite,
+      date_tirage: jackpot.date_tirage,
+      probabilite: jackpot.lottery?.probabilite || '',
+      notes: jackpot.notes,
+      lotteryId: jackpot.lottery_id,
+      region: jackpot.lottery?.region || 'france',
+    };
   };
 
 
   // Gerar notícias mockadas
   const generateNews = (): News[] => {
     const mockNews: News[] = [];
-    const lotteryIds = Object.keys(lotteries);
+    const lotteryIds = Object.keys(lotteriesMap);
+    
+    if (lotteryIds.length === 0) return mockNews;
     
     const titles = [
       'Nouveau jackpot record!',
@@ -275,52 +129,69 @@ export default function BonusPage({ onBack }: BonusPageProps) {
       const date = new Date();
       date.setDate(date.getDate() - i);
       
+      const lotteryId = lotteryIds[i % lotteryIds.length];
+      const lottery = lotteriesMap[lotteryId];
+      
       mockNews.push({
         id: `news_${i}`,
         data: date.toLocaleDateString('fr-FR'),
         titulo: titles[i],
-        resumo: `Découvrez les dernières actualités concernant ${lotteries[lotteryIds[i % lotteryIds.length]].name}. Ne manquez pas cette opportunité!`,
-        lotteryId: lotteryIds[i % lotteryIds.length]
+        resumo: `Découvrez les dernières actualités concernant ${lottery?.name || 'les loteries'}. Ne manquez pas cette opportunité!`,
+        lotteryId: lotteryId
       });
     }
     
     return mockNews;
   };
 
-  // Inicializar jackpots
+  // Carregar loterias e jackpots do banco de dados
   useEffect(() => {
-    const storedJackpots = localStorage.getItem('bonusJackpots');
-    const storedUpdate = localStorage.getItem('bonusJackpotsUpdate');
-    const storedVersion = localStorage.getItem('bonusJackpotsVersion');
+    const loadData = async () => {
+      try {
+        // Carregar loterias
+        const loadedLotteries = await fetchLotteries();
+        
+        // Criar mapa de loterias para compatibilidade
+        loadedLotteries.forEach(lottery => {
+          lotteriesMap[lottery.id] = {
+            name: lottery.name,
+            url: lottery.url,
+            region: lottery.region,
+            pays: lottery.pays,
+            probabilite: lottery.probabilite,
+            hasAPI: lottery.has_api,
+            apiUrl: lottery.api_url,
+          };
+        });
+        
+        // Verificar se precisa gerar novos jackpots (verificar última atualização)
+        const storedUpdate = localStorage.getItem('bonusJackpotsUpdate');
+        const now = Date.now();
+        const fourAM = new Date();
+        fourAM.setHours(4, 0, 0, 0);
+        const lastFourAM = fourAM.getTime() > now ? fourAM.getTime() - 86400000 : fourAM.getTime();
+        
+        const shouldRegenerate = !storedUpdate || parseInt(storedUpdate) < lastFourAM;
+        
+        if (shouldRegenerate) {
+          // Gerar novos jackpots
+          await generateJackpots();
+          localStorage.setItem('bonusJackpotsUpdate', now.toString());
+        }
+        
+        // Carregar jackpots do banco
+        const loadedJackpots = await fetchJackpots({ isPast: false });
+        const convertedJackpots = loadedJackpots.map(convertJackpot);
+        
+        console.log('Carregando jackpots do banco:', convertedJackpots.length);
+        setJackpots(convertedJackpots);
+        setLastJackpotUpdate(now);
+      } catch (error) {
+        console.error('Erro ao carregar jackpots:', error);
+      }
+    };
     
-    const now = Date.now();
-    const fourAM = new Date();
-    fourAM.setHours(4, 0, 0, 0);
-    const lastFourAM = fourAM.getTime() > now ? fourAM.getTime() - 86400000 : fourAM.getTime();
-    
-    // Versão atual - incrementar quando mudar a estrutura dos dados
-    const currentVersion = '3.0';
-    
-    // Regenerar se: não existir, versão diferente, ou passou das 4h
-    const shouldRegenerate = !storedJackpots || 
-                            !storedUpdate || 
-                            storedVersion !== currentVersion ||
-                            parseInt(storedUpdate) < lastFourAM;
-    
-    if (shouldRegenerate) {
-      const newJackpots = getTodayJackpots();
-      console.log('Gerando novos jackpots:', newJackpots.length);
-      setJackpots(newJackpots);
-      localStorage.setItem('bonusJackpots', JSON.stringify(newJackpots));
-      localStorage.setItem('bonusJackpotsUpdate', now.toString());
-      localStorage.setItem('bonusJackpotsVersion', currentVersion);
-      setLastJackpotUpdate(now);
-    } else {
-      const loadedJackpots = JSON.parse(storedJackpots);
-      console.log('Carregando jackpots do cache:', loadedJackpots.length);
-      setJackpots(loadedJackpots);
-      setLastJackpotUpdate(parseInt(storedUpdate));
-    }
+    loadData();
   }, []);
 
   // Inicializar notícias
@@ -357,14 +228,14 @@ export default function BonusPage({ onBack }: BonusPageProps) {
     if (jackpots.length > 0 && results.length === 0) {
       const generatedResults = jackpots.map((jackpot, index) => {
         // Calcular se já foi sorteado baseado na data
-        const hoje = new Date(2025, 10, 12);
+        const hoje = new Date();
         const [day, month, year] = jackpot.date_tirage.split('/');
         const dataTirage = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
         const isSorteado = dataTirage <= hoje;
         
         // Apenas fornecer números se tem API E já foi sorteado
         let numeros: number[] = [];
-        const hasAPI = lotteries[jackpot.lotteryId]?.hasAPI || false;
+        const hasAPI = lotteriesMap[jackpot.lotteryId]?.hasAPI || false;
         
         if (hasAPI && isSorteado) {
           // Gerar números únicos para cada sorteio baseado na data e loteria
@@ -410,7 +281,7 @@ export default function BonusPage({ onBack }: BonusPageProps) {
 
   // Abrir link da loteria
   const openLotteryLink = (lotteryId: string) => {
-    const lottery = lotteries[lotteryId];
+    const lottery = lotteriesMap[lotteryId];
     if (lottery) {
       window.open(lottery.url, '_blank');
     }
@@ -500,9 +371,12 @@ export default function BonusPage({ onBack }: BonusPageProps) {
       return;
     }
 
+    const lottery = lotteriesMap[selectedLottery];
+    if (!lottery) return;
+    
     const newTicket: Ticket = {
       id: `ticket_${Date.now()}`,
-      loterie: lotteries[selectedLottery].name,
+      loterie: lottery.name,
       lotteryId: selectedLottery,
       numeros: ticketNumbers.trim(),
       note: ticketNote.trim(),
@@ -1125,9 +999,9 @@ export default function BonusPage({ onBack }: BonusPageProps) {
                             } focus:outline-none focus:border-[#2BC047]`}
                           >
                             <option value="">Choisissez une loterie</option>
-                            {Object.keys(lotteries).map((lotteryId) => (
+                            {Object.keys(lotteriesMap).map((lotteryId) => (
                               <option key={lotteryId} value={lotteryId}>
-                                {lotteries[lotteryId].name}
+                                {lotteriesMap[lotteryId]?.name || lotteryId}
                               </option>
                             ))}
                           </select>
@@ -1336,7 +1210,7 @@ export default function BonusPage({ onBack }: BonusPageProps) {
                         <div className="flex items-center gap-2 mb-2">
                           <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{item.data}</span>
                           <span className="text-xs bg-[#2BC047] text-white px-2 py-1 rounded-full font-semibold">
-                            {lotteries[item.lotteryId]?.name || 'Général'}
+                            {lotteriesMap[item.lotteryId]?.name || 'Général'}
                           </span>
                         </div>
                         <h3 className={`text-lg font-bold mb-2 ${textColor}`}>{item.titulo}</h3>

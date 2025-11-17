@@ -288,7 +288,7 @@ export async function updateProfile(updates: {
     updateData.photo_url = photoUrl;
   }
 
-  // Atualiza no banco
+  // Atualiza no banco (o trigger SQL atualizará automaticamente os posts e comentários)
   const { data, error } = await supabase
     .from('user_profiles')
     .update(updateData)
@@ -300,6 +300,10 @@ export async function updateProfile(updates: {
     console.error('Erro ao atualizar perfil:', error);
     throw new Error('Erreur lors de la mise à jour du profil');
   }
+
+  // O trigger SQL já atualiza automaticamente:
+  // - community_posts.user_name quando user_profiles.name muda
+  // - feed_comments.user_name quando user_profiles.name muda
 
   return {
     name: data.name,
